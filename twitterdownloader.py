@@ -83,11 +83,14 @@ class twitterdownloader:
             headers['x-guest-token'] = guestoken
             async with session.get(apiurl, cookies=cookies, headers=headers, params=params) as r:
                 a = await r.json()
-            medias = a["data"]["tweetResult"]["result"]["legacy"]["entities"]["media"]
+            medias = a["data"]["tweetResult"]["result"]["legacy"]["entities"].get("media")
             fulltext = a["data"]["tweetResult"]["result"]["legacy"].get('full_text')
             author = "".join([x for x in a["data"]["tweetResult"]["result"]["core"]["user_results"]["result"]["legacy"]["screen_name"] if x not in '\\/:*?"<>|()'])
             if fulltext:
                 fulltext = fulltext.encode('utf-16', 'surrogatepass').decode('utf-16')
+            if not medias:
+                print("no medias found")
+                return {"caption": fulltext, "author": author}
             media_urls = []
             for media in medias:
                 if media.get("video_info"):
