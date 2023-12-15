@@ -4,8 +4,6 @@ This code uses the new v2 api twitter uses, and it uses guest authentication to 
 
 Won't bother adding manifest downloading as there is no difference in formats and would take longer to download than a direct link.
 
-Will possibly add support for authenticated downloading to get nsfw/private videos.
-
 Gifs are stored as mp4, you can convert it to gifs with ffmpeg.
 
 Normal videos are tag 12, and longer videos are tag 14, but I haven't seen any difference in downloading or direct link storing (downloaded big movies with it no issue)
@@ -51,3 +49,23 @@ filenames = result.get("filenames")
 author = result.get("author")
 caption = result.get("caption")
 ```
+
+## Get private/nsfw videos with authenticated fetching
+### Step 1. Create an env.py file in the same directory as the code, and put this there
+```python
+guest_id = '' 
+auth_token = '' 
+csrf = ''
+```
+### Step 2. Go to twitter, find a nsfw/private video
+Example: [https://x.com/sacredgraves/status/1707962195357630713?s=46](https://x.com/sacredgraves/status/1707962195357630713?s=46)
+### Step 3. Open developer tab, go to network, hit refresh
+### Step 4. search up tweetdetail
+
+![hi](image.png)
+
+### Step 5. Find the guest_id, auth_token and ct0
+
+![hello2](image-1.png)
+
+### Step 6. Add them to the env.py file, ct0 is the csrf token

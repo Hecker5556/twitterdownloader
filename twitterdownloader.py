@@ -1,4 +1,4 @@
-import aiohttp, aiofiles, asyncio, re, datetime, os
+import aiohttp, aiofiles, asyncio, re, datetime, os, json
 from tqdm.asyncio import tqdm
 from datetime import datetime
 
@@ -6,12 +6,42 @@ class twitterdownloader:
     class invalidlink(Exception):
         def __init__(self, *args: object) -> None:
             super().__init__(*args)
-
+    class missingcredentials(Exception):
+        def __init__(self, *args: object) -> None:
+            super().__init__(*args)
+    class videotoobig(Exception):
+        def __init__(self, *args: object) -> None:
+            super().__init__(*args)
     async def get_guest_token(session: aiohttp.ClientSession, headers: dict) -> str:
         async with session.post('https://api.twitter.com/1.1/guest/activate.json', headers=headers) as r:
             a = await r.json()
             return a['guest_token']
-        
+    async def get_api_url(session: aiohttp.ClientSession, link: str, headers: dict) -> tuple[str, str]:
+        pattern = r'href=\"(https://abs\.twimg\.com/responsive-web/client-web/main\.(?:.*?)\.js)\"'
+        async with session.get(link, headers=headers) as r:
+            while True:
+                chunk = await r.content.read(1024*2)
+                if not chunk:
+                    break
+                decoded = chunk.decode("utf-8")
+                matches = re.findall(pattern, decoded)
+                if matches:
+                    break
+        jslink = matches[0]
+        pattern2 = r'{queryId:\"(.*?)\",operationName:\"TweetResultByRestId\"'
+        pattern3 = r'queryId:\"(.*?)\",operationName:\"TweetDetail\"'
+        async with session.get(jslink) as r:
+            js = await r.text()
+        location1 = js[js.find("TweetResultByRestId")-50:js.find("TweetResultByRestId")+50]
+        location2 = js[js.find("TweetDetail")-50:js.find("TweetDetail")+50]
+        restid = re.findall(pattern2, location1)[0]
+        tweetdetail = re.findall(pattern3, location2)[0]
+        restid = f'https://api.twitter.com/graphql/{restid}/TweetResultByRestId'
+        tweetdetail = f'https://twitter.com/i/api/graphql/{tweetdetail}/TweetDetail'
+        thejson = {"restid": restid, "tweetdetail": tweetdetail}
+        async with aiofiles.open("apiurls.json", "w") as f1:
+            await f1.write(json.dumps(thejson))
+        return restid, tweetdetail
     async def get_bearer_token(session: aiohttp.ClientSession, link: str, headers: dict) -> str:
         async with session.get(link, headers=headers) as r:
             pattern = r'href=\"(https://abs\.twimg\.com/responsive-web/client-web/main\.(?:.*?)\.js)\"'
@@ -34,7 +64,33 @@ class twitterdownloader:
         async with aiofiles.open("bearer_token.txt", "w") as f1:
             await f1.write(matches[0])
         return matches[0]
-    
+    async def get_authenticated_tweet(tweet_id: int, csrf: str, guest_id: str, auth_token: str, bearer_token: str, session: aiohttp.ClientSession, apiurl: str):
+        cookies = {
+            'guest_id': guest_id,
+            'auth_token': auth_token,
+            'ct0': csrf,
+        }
+        headers = {
+            'authority': 'twitter.com',
+            'accept': '*/*',
+            'accept-language': 'en-US,en;q=0.7',
+            'authorization': bearer_token,
+            'content-type': 'application/json',
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'x-csrf-token': csrf,
+        }
+        params = {
+            'variables': '{"focalTweetId":%s,"with_rux_injections":false,"includePromotedContent":true,"withCommunity":true,"withQuickPromoteEligibilityTweetFields":true,"withBirdwatchNotes":true,"withVoice":true,"withV2Timeline":true}' % tweet_id,
+            'features': '{"responsive_web_graphql_exclude_directive_enabled":true,"verified_phone_label_enabled":false,"creator_subscriptions_tweet_preview_api_enabled":true,"responsive_web_graphql_timeline_navigation_enabled":true,"responsive_web_graphql_skip_user_profile_image_extensions_enabled":false,"c9s_tweet_anatomy_moderator_badge_enabled":true,"tweetypie_unmention_optimization_enabled":true,"responsive_web_edit_tweet_api_enabled":true,"graphql_is_translatable_rweb_tweet_is_translatable_enabled":true,"view_counts_everywhere_api_enabled":true,"longform_notetweets_consumption_enabled":true,"responsive_web_twitter_article_tweet_consumption_enabled":false,"tweet_awards_web_tipping_enabled":false,"freedom_of_speech_not_reach_fetch_enabled":true,"standardized_nudges_misinfo":true,"tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled":true,"rweb_video_timestamps_enabled":false,"longform_notetweets_rich_text_read_enabled":true,"longform_notetweets_inline_media_enabled":true,"responsive_web_media_download_video_enabled":false,"responsive_web_enhance_cards_enabled":false}',
+            'fieldToggles': '{"withArticleRichContentState":false}',
+        }
+        async with session.get(apiurl, cookies=cookies, headers=headers, params=params) as r:
+            result = await r.json()
+        medias = result["data"]["threaded_conversation_with_injections_v2"]["instructions"][0]["entries"][0]["content"]["itemContent"]["tweet_results"]["result"]["tweet"]["legacy"]["extended_entities"].get("media")
+        author = result["data"]["threaded_conversation_with_injections_v2"]["instructions"][0]["entries"][0]["content"]["itemContent"]["tweet_results"]["result"]["tweet"]["core"]["user_results"]["result"]["legacy"]["screen_name"]
+        author = "".join([x for x in author if x not in '\\/:*?"<>|()'])
+        fulltext = result["data"]["threaded_conversation_with_injections_v2"]["instructions"][0]["entries"][0]["content"]["itemContent"]["tweet_results"]["result"]["tweet"]["legacy"]["full_text"]
+        return medias, author, fulltext
     async def downloader(link: str, filename: str, session: aiohttp.ClientSession):
         async with aiofiles.open(filename, 'wb') as f1:
             async with session.get(link) as r:
@@ -66,37 +122,55 @@ class twitterdownloader:
         }
         params = {
             'variables': '{"tweetId":%s,"withCommunity":false,"includePromotedContent":false,"withVoice":false}' % tweet_id,
-            'features': '{"creator_subscriptions_tweet_preview_api_enabled":true,"c9s_tweet_anatomy_moderator_badge_enabled":true,"tweetypie_unmention_optimization_enabled":true,"responsive_web_edit_tweet_api_enabled":true,"graphql_is_translatable_rweb_tweet_is_translatable_enabled":true,"view_counts_everywhere_api_enabled":true,"longform_notetweets_consumption_enabled":true,"responsive_web_twitter_article_tweet_consumption_enabled":false,"tweet_awards_web_tipping_enabled":false,"freedom_of_speech_not_reach_fetch_enabled":true,"standardized_nudges_misinfo":true,"tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled":true,"longform_notetweets_rich_text_read_enabled":true,"longform_notetweets_inline_media_enabled":true,"responsive_web_graphql_exclude_directive_enabled":true,"verified_phone_label_enabled":false,"responsive_web_media_download_video_enabled":false,"responsive_web_graphql_skip_user_profile_image_extensions_enabled":false,"responsive_web_graphql_timeline_navigation_enabled":true,"responsive_web_enhance_cards_enabled":false}',
+            'features': '{"creator_subscriptions_tweet_preview_api_enabled":true,"c9s_tweet_anatomy_moderator_badge_enabled":true,"tweetypie_unmention_optimization_enabled":true,"responsive_web_edit_tweet_api_enabled":true,"graphql_is_translatable_rweb_tweet_is_translatable_enabled":true,"view_counts_everywhere_api_enabled":true,"longform_notetweets_consumption_enabled":true,"responsive_web_twitter_article_tweet_consumption_enabled":false,"tweet_awards_web_tipping_enabled":false,"freedom_of_speech_not_reach_fetch_enabled":true,"standardized_nudges_misinfo":true,"tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled":true,"rweb_video_timestamps_enabled":true,"longform_notetweets_rich_text_read_enabled":true,"longform_notetweets_inline_media_enabled":true,"responsive_web_graphql_exclude_directive_enabled":true,"verified_phone_label_enabled":false,"responsive_web_media_download_video_enabled":false,"responsive_web_graphql_skip_user_profile_image_extensions_enabled":false,"responsive_web_graphql_timeline_navigation_enabled":true,"responsive_web_enhance_cards_enabled":false}',
         }
-        apiurl = 'https://api.twitter.com/graphql/0M7XkziVtEOeOk9UyiKo9A/TweetResultByRestId'
         async with aiohttp.ClientSession() as session:
             if not os.path.exists("bearer_token.txt"):
                 bearer = await twitterdownloader.get_bearer_token(session, link, headers)
             else:
                 async with aiofiles.open("bearer_token.txt", "r") as f1:
                     bearer = await f1.read()
+            if not os.path.exists("apiurls.json"):
+                restid, tweetdetail = await twitterdownloader.get_api_url(session, link, headers)
+            else:
+                async with aiofiles.open("apiurls.json", "r") as f1:
+                    thejson = await f1.read()
+                    thejson = json.loads(thejson)
+                    restid, tweetdetail = thejson["restid"], thejson["tweetdetail"]
             headers['authorization'] = bearer
             guestoken = await twitterdownloader.get_guest_token(session, headers)
             cookies = {
                 'gt': guestoken
             }
             headers['x-guest-token'] = guestoken
-            async with session.get(apiurl, cookies=cookies, headers=headers, params=params) as r:
+            async with session.get(restid, cookies=cookies, headers=headers, params=params) as r:
                 a = await r.json()
-            medias = a["data"]["tweetResult"]["result"]["legacy"]["entities"].get("media")
-            fulltext = a["data"]["tweetResult"]["result"]["legacy"].get('full_text')
-            author = "".join([x for x in a["data"]["tweetResult"]["result"]["core"]["user_results"]["result"]["legacy"]["screen_name"] if x not in '\\/:*?"<>|()'])
+            # print(a)
+            if a["data"]["tweetResult"]["result"].get("__typename") and a["data"]["tweetResult"]["result"].get("__typename") == "TweetUnavailable":
+                if not os.path.exists("env.py"):
+                    raise twitterdownloader.missingcredentials("no credentials detected, make an env.py file, put csrf token, guest_id, auth_token there")
+                from env import csrf, auth_token, guest_id
+                result = await twitterdownloader.get_authenticated_tweet(tweet_id, csrf, guest_id, auth_token, bearer, session, tweetdetail)
+                medias = result[0]
+                fulltext = result[2]
+                author = result[1]
+            else:
+                medias = a["data"]["tweetResult"]["result"]["legacy"]["entities"].get("media")
+                fulltext = a["data"]["tweetResult"]["result"]["legacy"].get('full_text')
+                author = "".join([x for x in a["data"]["tweetResult"]["result"]["core"]["user_results"]["result"]["legacy"]["screen_name"] if x not in '\\/:*?"<>|()'])
             if fulltext:
                 fulltext = fulltext.encode('utf-16', 'surrogatepass').decode('utf-16')
             if not medias:
                 print("no medias found")
                 return {"caption": fulltext, "author": author}
             media_urls = []
+            duration = 0
             for media in medias:
                 if media.get("video_info"):
+                    duration = media["video_info"]["duration_millis"]
                     videos = []
                     for variant in media["video_info"]["variants"]:
-                        videos.append(variant["url"])
+                        videos.append((variant["url"], variant.get('bitrate')))
                     media_urls.append(videos)
                     continue
                 if media.get("media_url_https"):
@@ -109,21 +183,25 @@ class twitterdownloader:
                     if maxsize:
                         sizes = {}
                         for index, video in enumerate(media):
-                            if ".m3u8?tag=" in video:
+                            if ".m3u8?tag=" in video[0]:
                                 continue
-                            async with session.get(video, headers=headers) as r:
-                                print(video)
-                                sizes[index] = r.headers.get('content-length')
+                            sizes[index] = ((((video[1] * duration) / 1000)/8) / (1024*1024)) * 0.9
                         if len(media) == 1:
                             await twitterdownloader.downloader(media[0], filename, session)
                             continue
-                        sizes = sorted(sizes.items(), key=lambda x: int(x[1]), reverse=True)
+                        sizes = sorted(sizes.items(), key=lambda x: float(x[1]), reverse=True)
+                        print(sizes)
+                        downloaded = False
                         for index, size in sizes:
-                            if int(size)/(1024*1024) < maxsize:
+                            if size < maxsize:
                                 filename = f'{author}-{round(datetime.now().timestamp())}-{mindex}.mp4'
                                 filenames.append(filename)
-                                await twitterdownloader.downloader(media[index], filename, session)
+                                print(media[index][0])
+                                await twitterdownloader.downloader(media[index][0], filename, session)
+                                downloaded = True
                                 break
+                        if not downloaded:
+                            raise twitterdownloader.videotoobig("video too large to download")
                     else:
                         filename = f'{author}-{round(datetime.now().timestamp())}-{mindex}.mp4'
                         filenames.append(filename)
@@ -133,7 +211,7 @@ class twitterdownloader:
                         resolutions = {}
                         pattern = r'((?:\d*?)x(?:\d*?))/'
                         for index, video in enumerate(media):
-                            matches = re.findall(pattern, video)
+                            matches = re.findall(pattern, video[0])
                             if not matches:
                                 continue
                             uh = 1
@@ -142,7 +220,7 @@ class twitterdownloader:
                                 uh = uh * i
                             resolutions[index] = uh
                         resolutions = sorted(resolutions.items(), key=lambda x: x[1], reverse=True)
-                        await twitterdownloader.downloader(media[resolutions[0][0]], filename, session)
+                        await twitterdownloader.downloader(media[resolutions[0][0]][0], filename, session)
                 else:
                     filename = f'{author}-{round(datetime.now().timestamp())}-{mindex}.jpg'
                     filenames.append(filename)
