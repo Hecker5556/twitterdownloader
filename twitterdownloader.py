@@ -105,10 +105,13 @@ class twitterdownloader:
                 progress.close()
     async def download(link: str, maxsize: int = None, returnurl: bool = False):
         link = link.split('?')[0]
-        pattern = r'https://(?:x)?(?:twitter)?\.com/(?:.*?)/status/(\d*?)$'
+        pattern = r'https://(?:x)?(?:twitter)?\.com/(?:.*?)/status/(\d*?)/?$'
+        pattern2 = r"https://(?:x)?(?:twitter)?\.com/(?:.*?)/status/(\d*?)/(?:.*?)/\d$"
         tweet_id = re.findall(pattern, link)
         if not tweet_id:
-            raise twitterdownloader.invalidlink("the link is invalid i think")
+            tweet_id = re.findall(pattern2, link)
+            if not tweet_id:
+                raise twitterdownloader.invalidlink("the link is invalid i think")
         
         tweet_id = tweet_id[0]
         headers = {
