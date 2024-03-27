@@ -89,10 +89,17 @@ class twitterdownloader:
         }
         async with session.get(apiurl, cookies=cookies, headers=headers, params=params, proxy=proxy if proxy and proxy.startswith("https") else None) as r:
             result = await r.json()
-        medias = result["data"]["threaded_conversation_with_injections_v2"]["instructions"][0]["entries"][0]["content"]["itemContent"]["tweet_results"]["result"]["tweet"]["legacy"]["extended_entities"].get("media")
-        author = result["data"]["threaded_conversation_with_injections_v2"]["instructions"][0]["entries"][0]["content"]["itemContent"]["tweet_results"]["result"]["tweet"]["core"]["user_results"]["result"]["legacy"]["screen_name"]
+
+        medias = result["data"]["threaded_conversation_with_injections_v2"]["instructions"][0]["entries"][0]["content"]["itemContent"]["tweet_results"]["result"].get("tweet")
+        if not medias:
+            medias = result["data"]["threaded_conversation_with_injections_v2"]["instructions"][0]["entries"][0]["content"]["itemContent"]["tweet_results"]["result"]["legacy"]["entities"].get("media")
+        author = result["data"]["threaded_conversation_with_injections_v2"]["instructions"][0]["entries"][0]["content"]["itemContent"]["tweet_results"]["result"].get("tweet")
+        if not author:
+            author = result["data"]["threaded_conversation_with_injections_v2"]["instructions"][0]["entries"][0]["content"]["itemContent"]["tweet_results"]["result"]["core"]["user_results"]["result"]["legacy"]["screen_name"]
         author = "".join([x for x in author if x not in '\\/:*?"<>|()'])
-        fulltext = result["data"]["threaded_conversation_with_injections_v2"]["instructions"][0]["entries"][0]["content"]["itemContent"]["tweet_results"]["result"]["tweet"]["legacy"]["full_text"]
+        fulltext = result["data"]["threaded_conversation_with_injections_v2"]["instructions"][0]["entries"][0]["content"]["itemContent"]["tweet_results"]["result"].get("tweet")
+        if not fulltext:
+            fulltext = result["data"]["threaded_conversation_with_injections_v2"]["instructions"][0]["entries"][0]["content"]["itemContent"]["tweet_results"]["result"]["legacy"]["full_text"]
         return medias, author, fulltext
     async def downloader(link: str, filename: str, session: aiohttp.ClientSession, proxy: str = None):
         async with aiofiles.open(filename, 'wb') as f1:
@@ -151,7 +158,8 @@ class twitterdownloader:
             headers['x-guest-token'] = guestoken
             async with session.get(restid, cookies=cookies, headers=headers, params=params, proxy=proxy if proxy and proxy.startswith("https") else None) as r:
                 a = await r.json()
-            # print(a)
+                async with aiofiles.open("response.json", "wb") as f1:
+                    await f1.write(json.dumps(a))
             if a["data"]["tweetResult"]["result"].get("__typename") and a["data"]["tweetResult"]["result"].get("__typename") == "TweetUnavailable":
                 if not os.path.exists("env.py"):
                     raise twitterdownloader.missingcredentials("no credentials detected, make an env.py file, put csrf token, guest_id, auth_token there")
