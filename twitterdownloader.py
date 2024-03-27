@@ -158,7 +158,7 @@ class twitterdownloader:
             headers['x-guest-token'] = guestoken
             async with session.get(restid, cookies=cookies, headers=headers, params=params, proxy=proxy if proxy and proxy.startswith("https") else None) as r:
                 a = await r.json()
-                async with aiofiles.open("response.json", "wb") as f1:
+                async with aiofiles.open("response.json", "w") as f1:
                     await f1.write(json.dumps(a))
             if a["data"]["tweetResult"]["result"].get("__typename") and a["data"]["tweetResult"]["result"].get("__typename") == "TweetUnavailable":
                 if not os.path.exists("env.py"):
