@@ -1,6 +1,7 @@
 import aiohttp, aiofiles, asyncio, re, datetime, os, json
 from tqdm.asyncio import tqdm
 from datetime import datetime
+from aiohttp_socks import ProxyConnector
 
 class twitterdownloader:
     class invalidlink(Exception):
@@ -12,13 +13,15 @@ class twitterdownloader:
     class videotoobig(Exception):
         def __init__(self, *args: object) -> None:
             super().__init__(*args)
-    async def get_guest_token(session: aiohttp.ClientSession, headers: dict) -> str:
-        async with session.post('https://api.twitter.com/1.1/guest/activate.json', headers=headers) as r:
+    async def get_guest_token(session: aiohttp.ClientSession, headers: dict, proxy: str = None) -> str:
+        async with session.post('https://api.twitter.com/1.1/guest/activate.json', headers=headers, proxy=proxy if proxy and proxy.startswith("https") else None) as r:
             a = await r.json()
             return a['guest_token']
-    async def get_api_url(session: aiohttp.ClientSession, link: str, headers: dict) -> tuple[str, str]:
+    def createconnector(proxy: str):
+        return aiohttp.TCPConnector() if not proxy.startswith("socks") else ProxyConnector.from_url(proxy)
+    async def get_api_url(session: aiohttp.ClientSession, link: str, headers: dict, proxy: str = None) -> tuple[str, str]:
         pattern = r'href=\"(https://abs\.twimg\.com/responsive-web/client-web/main\.(?:.*?)\.js)\"'
-        async with session.get(link, headers=headers) as r:
+        async with session.get(link, headers=headers, proxy=proxy if proxy and proxy.startswith("https") else None) as r:
             while True:
                 chunk = await r.content.read(1024*2)
                 if not chunk:
@@ -42,15 +45,15 @@ class twitterdownloader:
         async with aiofiles.open("apiurls.json", "w") as f1:
             await f1.write(json.dumps(thejson))
         return restid, tweetdetail
-    async def get_bearer_token(session: aiohttp.ClientSession, link: str, headers: dict) -> str:
-        async with session.get(link, headers=headers) as r:
+    async def get_bearer_token(session: aiohttp.ClientSession, link: str, headers: dict, proxy: str = None) -> str:
+        async with session.get(link, headers=headers, proxy=proxy if proxy and proxy.startswith("https") else None) as r:
             pattern = r'href=\"(https://abs\.twimg\.com/responsive-web/client-web/main\.(?:.*?)\.js)\"'
             text = await r.text()
             matches = re.findall(pattern, text)
             if not matches:
                 raise twitterdownloader.invalidlink("invalid link idk")
         jslink = matches[0]
-        async with session.get(jslink) as r:
+        async with session.get(jslink, proxy=proxy if proxy and proxy.startswith("https") else None) as r:
             pattern = r'\"(Bearer (?:.*?))\"'
             while True:
                 chunk = await r.content.read(1024*10)
@@ -64,7 +67,7 @@ class twitterdownloader:
         async with aiofiles.open("bearer_token.txt", "w") as f1:
             await f1.write(matches[0])
         return matches[0]
-    async def get_authenticated_tweet(tweet_id: int, csrf: str, guest_id: str, auth_token: str, bearer_token: str, session: aiohttp.ClientSession, apiurl: str):
+    async def get_authenticated_tweet(tweet_id: int, csrf: str, guest_id: str, auth_token: str, bearer_token: str, session: aiohttp.ClientSession, apiurl: str, proxy: str = None):
         cookies = {
             'guest_id': guest_id,
             'auth_token': auth_token,
@@ -84,16 +87,16 @@ class twitterdownloader:
             'features': '{"responsive_web_graphql_exclude_directive_enabled":true,"verified_phone_label_enabled":false,"creator_subscriptions_tweet_preview_api_enabled":true,"responsive_web_graphql_timeline_navigation_enabled":true,"responsive_web_graphql_skip_user_profile_image_extensions_enabled":false,"c9s_tweet_anatomy_moderator_badge_enabled":true,"tweetypie_unmention_optimization_enabled":true,"responsive_web_edit_tweet_api_enabled":true,"graphql_is_translatable_rweb_tweet_is_translatable_enabled":true,"view_counts_everywhere_api_enabled":true,"longform_notetweets_consumption_enabled":true,"responsive_web_twitter_article_tweet_consumption_enabled":false,"tweet_awards_web_tipping_enabled":false,"freedom_of_speech_not_reach_fetch_enabled":true,"standardized_nudges_misinfo":true,"tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled":true,"rweb_video_timestamps_enabled":false,"longform_notetweets_rich_text_read_enabled":true,"longform_notetweets_inline_media_enabled":true,"responsive_web_media_download_video_enabled":false,"responsive_web_enhance_cards_enabled":false}',
             'fieldToggles': '{"withArticleRichContentState":false}',
         }
-        async with session.get(apiurl, cookies=cookies, headers=headers, params=params) as r:
+        async with session.get(apiurl, cookies=cookies, headers=headers, params=params, proxy=proxy if proxy and proxy.startswith("https") else None) as r:
             result = await r.json()
         medias = result["data"]["threaded_conversation_with_injections_v2"]["instructions"][0]["entries"][0]["content"]["itemContent"]["tweet_results"]["result"]["tweet"]["legacy"]["extended_entities"].get("media")
         author = result["data"]["threaded_conversation_with_injections_v2"]["instructions"][0]["entries"][0]["content"]["itemContent"]["tweet_results"]["result"]["tweet"]["core"]["user_results"]["result"]["legacy"]["screen_name"]
         author = "".join([x for x in author if x not in '\\/:*?"<>|()'])
         fulltext = result["data"]["threaded_conversation_with_injections_v2"]["instructions"][0]["entries"][0]["content"]["itemContent"]["tweet_results"]["result"]["tweet"]["legacy"]["full_text"]
         return medias, author, fulltext
-    async def downloader(link: str, filename: str, session: aiohttp.ClientSession):
+    async def downloader(link: str, filename: str, session: aiohttp.ClientSession, proxy: str = None):
         async with aiofiles.open(filename, 'wb') as f1:
-            async with session.get(link) as r:
+            async with session.get(link, proxy=proxy if proxy and proxy.startswith("https") else None) as r:
                 total = int(r.headers.get('content-length'))
                 progress = tqdm(total=total, unit='iB', unit_scale=True)
                 while True:
@@ -103,7 +106,7 @@ class twitterdownloader:
                     await f1.write(chunk)
                     progress.update(len(chunk))
                 progress.close()
-    async def download(link: str, maxsize: int = None, returnurl: bool = False):
+    async def download(link: str, maxsize: int = None, returnurl: bool = False, proxy: str = None):
         link = link.split('?')[0]
         pattern = r'https://(?:x)?(?:twitter)?\.com/(?:.*?)/status/(\d*?)/?$'
         pattern2 = r"https://(?:x)?(?:twitter)?\.com/(?:.*?)/status/(\d*?)/(?:.*?)/\d$"
@@ -127,33 +130,33 @@ class twitterdownloader:
             'variables': '{"tweetId":%s,"withCommunity":false,"includePromotedContent":false,"withVoice":false}' % tweet_id,
             'features': '{"creator_subscriptions_tweet_preview_api_enabled":true,"c9s_tweet_anatomy_moderator_badge_enabled":true,"tweetypie_unmention_optimization_enabled":true,"responsive_web_edit_tweet_api_enabled":true,"graphql_is_translatable_rweb_tweet_is_translatable_enabled":true,"view_counts_everywhere_api_enabled":true,"longform_notetweets_consumption_enabled":true,"responsive_web_twitter_article_tweet_consumption_enabled":false,"tweet_awards_web_tipping_enabled":false,"freedom_of_speech_not_reach_fetch_enabled":true,"standardized_nudges_misinfo":true,"tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled":true,"rweb_video_timestamps_enabled":true,"longform_notetweets_rich_text_read_enabled":true,"longform_notetweets_inline_media_enabled":true,"responsive_web_graphql_exclude_directive_enabled":true,"verified_phone_label_enabled":false,"responsive_web_media_download_video_enabled":false,"responsive_web_graphql_skip_user_profile_image_extensions_enabled":false,"responsive_web_graphql_timeline_navigation_enabled":true,"responsive_web_enhance_cards_enabled":false}',
         }
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(connector=twitterdownloader.createconnector(proxy)) as session:
             if not os.path.exists("bearer_token.txt"):
-                bearer = await twitterdownloader.get_bearer_token(session, link, headers)
+                bearer = await twitterdownloader.get_bearer_token(session, link, headers, proxy)
             else:
                 async with aiofiles.open("bearer_token.txt", "r") as f1:
                     bearer = await f1.read()
             if not os.path.exists("apiurls.json"):
-                restid, tweetdetail = await twitterdownloader.get_api_url(session, link, headers)
+                restid, tweetdetail = await twitterdownloader.get_api_url(session, link, headers, proxy)
             else:
                 async with aiofiles.open("apiurls.json", "r") as f1:
                     thejson = await f1.read()
                     thejson = json.loads(thejson)
                     restid, tweetdetail = thejson["restid"], thejson["tweetdetail"]
             headers['authorization'] = bearer
-            guestoken = await twitterdownloader.get_guest_token(session, headers)
+            guestoken = await twitterdownloader.get_guest_token(session, headers, proxy)
             cookies = {
                 'gt': guestoken
             }
             headers['x-guest-token'] = guestoken
-            async with session.get(restid, cookies=cookies, headers=headers, params=params) as r:
+            async with session.get(restid, cookies=cookies, headers=headers, params=params, proxy=proxy if proxy and proxy.startswith("https") else None) as r:
                 a = await r.json()
             # print(a)
             if a["data"]["tweetResult"]["result"].get("__typename") and a["data"]["tweetResult"]["result"].get("__typename") == "TweetUnavailable":
                 if not os.path.exists("env.py"):
                     raise twitterdownloader.missingcredentials("no credentials detected, make an env.py file, put csrf token, guest_id, auth_token there")
                 from env import csrf, auth_token, guest_id
-                result = await twitterdownloader.get_authenticated_tweet(tweet_id, csrf, guest_id, auth_token, bearer, session, tweetdetail)
+                result = await twitterdownloader.get_authenticated_tweet(tweet_id, csrf, guest_id, auth_token, bearer, session, tweetdetail, proxy)
                 medias = result[0]
                 fulltext = result[2]
                 author = result[1]
@@ -190,7 +193,7 @@ class twitterdownloader:
                                 continue
                             sizes[index] = ((((video[1] * duration) / 1000)/8) / (1024*1024)) * 0.9
                         if len(media) == 1:
-                            await twitterdownloader.downloader(media[0], filename, session)
+                            await twitterdownloader.downloader(media[0], filename, session, proxy)
                             continue
                         sizes = sorted(sizes.items(), key=lambda x: float(x[1]), reverse=True)
                         print(sizes)
@@ -200,7 +203,7 @@ class twitterdownloader:
                                 filename = f'{author}-{round(datetime.now().timestamp())}-{mindex}.mp4'
                                 filenames.append(filename)
                                 print(media[index][0])
-                                await twitterdownloader.downloader(media[index][0], filename, session)
+                                await twitterdownloader.downloader(media[index][0], filename, session, proxy)
                                 downloaded = True
                                 break
                         if not downloaded:
@@ -209,7 +212,7 @@ class twitterdownloader:
                         filename = f'{author}-{round(datetime.now().timestamp())}-{mindex}.mp4'
                         filenames.append(filename)
                         if len(media) == 1:
-                            await twitterdownloader.downloader(media[0], filename, session)
+                            await twitterdownloader.downloader(media[0], filename, session, proxy)
                             continue
                         resolutions = {}
                         pattern = r'((?:\d*?)x(?:\d*?))/'
@@ -223,11 +226,11 @@ class twitterdownloader:
                                 uh = uh * i
                             resolutions[index] = uh
                         resolutions = sorted(resolutions.items(), key=lambda x: x[1], reverse=True)
-                        await twitterdownloader.downloader(media[resolutions[0][0]][0], filename, session)
+                        await twitterdownloader.downloader(media[resolutions[0][0]][0], filename, session, proxy)
                 else:
                     filename = f'{author}-{round(datetime.now().timestamp())}-{mindex}.jpg'
                     filenames.append(filename)
-                    await twitterdownloader.downloader(media, filename, session)
+                    await twitterdownloader.downloader(media, filename, session, proxy)
             return {"filenames": filenames, "author": author, "caption": fulltext}
 if __name__ == "__main__":
     import argparse
@@ -235,5 +238,6 @@ if __name__ == "__main__":
     parser.add_argument("link", help="link to twitter post")
     parser.add_argument("-m", "--max-size", type=int, help="max size in mb of a video")
     parser.add_argument("-r", "--return-url", action="store_true", help="print urls of medias instead of download")
+    parser.add_argument("-p", "--proxy", type=str, help="https/socks proxy to use")
     args = parser.parse_args()
-    print(asyncio.run(twitterdownloader.download(args.link, args.max_size, args.return_url)))
+    print(asyncio.run(twitterdownloader.download(args.link, args.max_size, args.return_url, args.proxy)))
