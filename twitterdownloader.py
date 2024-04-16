@@ -84,7 +84,7 @@ class twitterdownloader:
         }
         params = {
             'variables': '{"focalTweetId":%s,"with_rux_injections":false,"includePromotedContent":true,"withCommunity":true,"withQuickPromoteEligibilityTweetFields":true,"withBirdwatchNotes":true,"withVoice":true,"withV2Timeline":true}' % tweet_id,
-            'features': json.loads(FEATURES),
+            'features': json.dumps(FEATURES),
             'fieldToggles': '{"withArticleRichContentState":false}',
         }
         async with session.get(apiurl, cookies=cookies, headers=headers, params=params, proxy=proxy if proxy and proxy.startswith("https") else None) as r:
@@ -135,7 +135,7 @@ class twitterdownloader:
         }
         params = {
             'variables': '{"tweetId":%s,"withCommunity":false,"includePromotedContent":false,"withVoice":false}' % tweet_id,
-            'features': json.loads(FEATURES)
+            'features': json.dumps(FEATURES)
         }
         async with aiohttp.ClientSession(connector=twitterdownloader.createconnector(proxy)) as session:
             if not os.path.exists("bearer_token.txt"):
