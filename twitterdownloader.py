@@ -2,7 +2,8 @@ import aiohttp, aiofiles, asyncio, re, datetime, os, json
 from tqdm.asyncio import tqdm
 from datetime import datetime
 from aiohttp_socks import ProxyConnector
-FEATURES = {"responsive_web_graphql_exclude_directive_enabled":True,"verified_phone_label_enabled":False,"creator_subscriptions_tweet_preview_api_enabled":True,"responsive_web_graphql_timeline_navigation_enabled":True,"responsive_web_graphql_skip_user_profile_image_extensions_enabled":False,"c9s_tweet_anatomy_moderator_badge_enabled":True,"tweetypie_unmention_optimization_enabled":True,"responsive_web_edit_tweet_api_enabled":True,"graphql_is_translatable_rweb_tweet_is_translatable_enabled":True,"view_counts_everywhere_api_enabled":True,"longform_notetweets_consumption_enabled":True,"responsive_web_twitter_article_tweet_consumption_enabled":False,"tweet_awards_web_tipping_enabled":False,"freedom_of_speech_not_reach_fetch_enabled":True,"standardized_nudges_misinfo":True,"tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled":True,"rweb_video_timestamps_enabled":False,"longform_notetweets_rich_text_read_enabled":True,"longform_notetweets_inline_media_enabled":True,"responsive_web_media_download_video_enabled":False,"responsive_web_enhance_cards_enabled":False,"communities_web_enable_tweet_community_results_fetch":True,"tweet_with_visibility_results_prefer_gql_media_interstitial_enabled":True,"rweb_tipjar_consumption_enabled":True, "creator_subscriptions_quote_tweet_preview_enabled":True, "rweb_tipjar_consumption_enabled, creator_subscriptions_quote_tweet_preview_enabled": True}
+with open("features.json", "r") as f1:
+    FEATURES = json.load(f1)
 class twitterdownloader:
     class invalidlink(Exception):
         def __init__(self, *args: object) -> None:
@@ -160,6 +161,21 @@ class twitterdownloader:
                 a = await r.json()
                 async with aiofiles.open("response.json", "w") as f1:
                     await f1.write(json.dumps(a))
+            if not a.get('data'):
+                new_features = a['errors'][0]['message'].split(': ')[1].split(', ')
+                for ft in new_features:
+                    print(f"adding new feature {ft} to features")
+                    FEATURES[ft] = True
+                with open('features.json', 'w') as f1:
+                    json.dump(FEATURES, f1)
+                params = {
+                    'variables': '{"tweetId":%s,"withCommunity":false,"includePromotedContent":false,"withVoice":false}' % tweet_id,
+                    'features': json.dumps(FEATURES)
+                }
+                async with session.get(restid, cookies=cookies, headers=headers, params=params, proxy=proxy if proxy and proxy.startswith("https") else None) as r:
+                    a = await r.json()
+                    async with aiofiles.open("response.json", "w") as f1:
+                        await f1.write(json.dumps(a))    
             if a["data"]["tweetResult"]["result"].get("__typename") and a["data"]["tweetResult"]["result"].get("__typename") == "TweetUnavailable":
                 if not os.path.exists("env.py"):
                     raise twitterdownloader.missingcredentials("no credentials detected, make an env.py file, put csrf token, guest_id, auth_token there")
