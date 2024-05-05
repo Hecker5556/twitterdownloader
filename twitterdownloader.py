@@ -199,14 +199,16 @@ class twitterdownloader:
             media_urls = []
             duration = 0
             for media in medias:
-                if media.get("video_info"):
-                    duration = media["video_info"]["duration_millis"]
+                if media.get('type') == 'animated_gif':
+                    media_urls.append((media['video_info']['variants'][0].get('url'), 0))
+                elif media.get("video_info"):
+                    duration = media["video_info"].get("duration_millis")
                     videos = []
                     for variant in media["video_info"]["variants"]:
                         videos.append((variant["url"], variant.get('bitrate')))
                     media_urls.append(videos)
                     continue
-                if media.get("media_url_https"):
+                elif media.get("media_url_https"):
                     media_urls.append(media.get("media_url_https"))
             if returnurl:
                 return {"mediaurls": media_urls, "author": author, "caption": fulltext}
@@ -223,13 +225,12 @@ class twitterdownloader:
                             await twitterdownloader.downloader(media[0], filename, session, proxy)
                             continue
                         sizes = sorted(sizes.items(), key=lambda x: float(x[1]), reverse=True)
-                        print(sizes)
                         downloaded = False
                         for index, size in sizes:
                             if size < maxsize:
                                 filename = f'{author}-{round(datetime.now().timestamp())}-{mindex}.mp4'
                                 filenames.append(filename)
-                                print(media[index][0])
+                                # print(media[index][0])
                                 await twitterdownloader.downloader(media[index][0], filename, session, proxy)
                                 downloaded = True
                                 break
@@ -254,6 +255,10 @@ class twitterdownloader:
                             resolutions[index] = uh
                         resolutions = sorted(resolutions.items(), key=lambda x: x[1], reverse=True)
                         await twitterdownloader.downloader(media[resolutions[0][0]][0], filename, session, proxy)
+                elif isinstance(media, tuple):
+                    filename = f'{author}-{round(datetime.now().timestamp())}-{mindex}.mp4'
+                    filenames.append(filename)
+                    await twitterdownloader.downloader(media[0], filename, session, proxy)
                 else:
                     filename = f'{author}-{round(datetime.now().timestamp())}-{mindex}.jpg'
                     filenames.append(filename)
