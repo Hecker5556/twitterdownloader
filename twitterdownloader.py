@@ -93,18 +93,40 @@ class twitterdownloader:
         }
         async with session.get(apiurl, cookies=cookies, headers=headers, params=params, proxy=proxy if proxy and proxy.startswith("https") else None) as r:
             result = await r.json()
-
-        medias = result["data"]["threaded_conversation_with_injections_v2"]["instructions"][0]["entries"][0]["content"]["itemContent"]["tweet_results"]["result"].get("tweet")
-        if not medias:
-            medias = result["data"]["threaded_conversation_with_injections_v2"]["instructions"][0]["entries"][0]["content"]["itemContent"]["tweet_results"]["result"]["legacy"]["entities"].get("media")
-        author = result["data"]["threaded_conversation_with_injections_v2"]["instructions"][0]["entries"][0]["content"]["itemContent"]["tweet_results"]["result"].get("tweet")
-        if not author:
-            author = result["data"]["threaded_conversation_with_injections_v2"]["instructions"][0]["entries"][0]["content"]["itemContent"]["tweet_results"]["result"]["core"]["user_results"]["result"]["legacy"]["screen_name"]
+            with open("response.json", "w") as f1:
+                json.dump(result, f1, indent=4)
+        for i in result["data"]["threaded_conversation_with_injections_v2"]["instructions"][0]["entries"][::-1]:
+            if "tweet" in i.get("entryId"):
+                entry = i
+                break
+        # entry = result["data"]["threaded_conversation_with_injections_v2"]["instructions"][0]["entries"][-1]
+        resp_type = False if entry["content"].get("items") else True
+        if not resp_type:
+            tweet_results = entry["content"]["items"][0]["item"]["itemContent"]["tweet_results"]["result"]
+        else:
+            try:
+                tweet_results = entry["content"]["itemContent"]["tweet_results"]["result"]
+            except KeyError:
+                from pprint import pprint
+                pprint(entry)
+                exit()
+        medias = tweet_results["legacy"]["entities"].get("media")
+        author = tweet_results["core"]["user_results"]["result"]["legacy"]["screen_name"]
         author = "".join([x for x in author if x not in '\\/:*?"<>|()'])
-        fulltext = result["data"]["threaded_conversation_with_injections_v2"]["instructions"][0]["entries"][0]["content"]["itemContent"]["tweet_results"]["result"].get("tweet")
-        if not fulltext:
-            fulltext = result["data"]["threaded_conversation_with_injections_v2"]["instructions"][0]["entries"][0]["content"]["itemContent"]["tweet_results"]["result"]["legacy"]["full_text"]
-        return medias, author, fulltext
+        fulltext = tweet_results["legacy"]["full_text"]
+        quoted  = tweet_results.get("quoted_status_result")
+        quoted_tweet = {}
+        if quoted:
+            q_media = quoted["result"]["legacy"]["entities"].get("media")
+            if q_media:
+                quoted_tweet['media'] = [x.get('media_url_https') for x in q_media]
+            quoted_tweet['caption'] = quoted["result"]["legacy"].get('full_text')
+            quoted_tweet['author'] = "".join([x for x in quoted["result"]["core"]["user_results"]])
+        reply = tweet_results['legacy'].get("in_reply_to_status_id_str")
+        replyingto = {}
+        if reply:
+            replyingto = await twitterdownloader.download(f'https://x.com/{tweet_results["legacy"].get("in_reply_to_screen_name")}/status/{reply}', returnurl=True, proxy=proxy)
+        return medias, author, fulltext, quoted_tweet, replyingto
     async def downloader(link: str, filename: str, session: aiohttp.ClientSession, proxy: str = None):
         async with aiofiles.open(filename, 'wb') as f1:
             async with session.get(link, proxy=proxy if proxy and proxy.startswith("https") else None) as r:
@@ -179,6 +201,7 @@ class twitterdownloader:
                     a = await r.json()
                     async with aiofiles.open("response.json", "w") as f1:
                         await f1.write(json.dumps(a))    
+            replyingto = None
             if a["data"]["tweetResult"]["result"].get("__typename") and a["data"]["tweetResult"]["result"].get("__typename") == "TweetUnavailable":
                 if not os.path.exists("env.py"):
                     raise twitterdownloader.missingcredentials("no credentials detected, make an env.py file, put csrf token, guest_id, auth_token there")
@@ -187,15 +210,29 @@ class twitterdownloader:
                 medias = result[0]
                 fulltext = result[2]
                 author = result[1]
+                quoted_tweet = result[3]
+                replyingto = result[4]
             else:
                 medias = a["data"]["tweetResult"]["result"]["legacy"]["entities"].get("media")
                 fulltext = a["data"]["tweetResult"]["result"]["legacy"].get('full_text')
                 author = "".join([x for x in a["data"]["tweetResult"]["result"]["core"]["user_results"]["result"]["legacy"]["screen_name"] if x not in '\\/:*?"<>|()'])
+                quoted = a["data"]["tweetResult"]["result"].get("quoted_status_result")
+                quoted_tweet = {}
+                if quoted:
+                    q_media = quoted["result"]["legacy"]["entities"].get("media")
+                    if q_media:
+                        quoted_tweet['media'] = [x.get('media_url_https') for x in q_media]
+                    quoted_tweet['caption'] = quoted["result"]["legacy"].get('full_text')
+                    quoted_tweet['author'] = "".join([x for x in quoted["result"]["core"]["user_results"]["result"]["legacy"]["screen_name"] if x not in '\\/:*?"<>|()'])
+                replying_to = a["data"]["tweetResult"]["result"]["legacy"].get("in_reply_to_status_id_str")
+                replyingto = {}
+                if replying_to:
+                    replyingto = await twitterdownloader.download(f'https://x.com/{a["data"]["tweetResult"]["result"]["legacy"].get("in_reply_to_screen_name")}/status/{replying_to}', returnurl=True, proxy=proxy)
             if fulltext:
                 fulltext = fulltext.encode('utf-16', 'surrogatepass').decode('utf-16')
             if not medias:
                 print("no medias found")
-                return {"caption": fulltext, "author": author}
+                return {"caption": fulltext, "author": author, "quoted_tweet": quoted_tweet, "replying_to": replyingto}
             media_urls = []
             duration = 0
             for media in medias:
@@ -211,7 +248,7 @@ class twitterdownloader:
                 elif media.get("media_url_https"):
                     media_urls.append(media.get("media_url_https"))
             if returnurl:
-                return {"mediaurls": media_urls, "author": author, "caption": fulltext}
+                return {"mediaurls": media_urls, "author": author, "caption": fulltext, "quoted_tweet": quoted_tweet, "replying_to": replyingto}
             filenames = []
             for mindex, media in enumerate(media_urls):
                 if isinstance(media, list):
@@ -263,7 +300,7 @@ class twitterdownloader:
                     filename = f'{author}-{round(datetime.now().timestamp())}-{mindex}.jpg'
                     filenames.append(filename)
                     await twitterdownloader.downloader(media, filename, session, proxy)
-            return {"filenames": filenames, "author": author, "caption": fulltext}
+            return {"filenames": filenames, "author": author, "caption": fulltext, "quoted_tweet": quoted_tweet, "replying_to": replyingto}
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
@@ -272,4 +309,4 @@ if __name__ == "__main__":
     parser.add_argument("-r", "--return-url", action="store_true", help="print urls of medias instead of download")
     parser.add_argument("-p", "--proxy", type=str, help="https/socks proxy to use")
     args = parser.parse_args()
-    print(asyncio.run(twitterdownloader.download(args.link, args.max_size, args.return_url, args.proxy)))
+    print(json.dumps(asyncio.run(twitterdownloader.download(args.link, args.max_size, args.return_url, args.proxy))))
