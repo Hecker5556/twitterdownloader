@@ -104,12 +104,7 @@ class twitterdownloader:
         if not resp_type:
             tweet_results = entry["content"]["items"][0]["item"]["itemContent"]["tweet_results"]["result"]
         else:
-            try:
-                tweet_results = entry["content"]["itemContent"]["tweet_results"]["result"]
-            except KeyError:
-                from pprint import pprint
-                pprint(entry)
-                exit()
+            tweet_results = entry["content"]["itemContent"]["tweet_results"]["result"]
         medias = tweet_results["legacy"]["entities"].get("media")
         author = tweet_results["core"]["user_results"]["result"]["legacy"]["screen_name"]
         author = "".join([x for x in author if x not in '\\/:*?"<>|()'])
@@ -202,6 +197,7 @@ class twitterdownloader:
                     async with aiofiles.open("response.json", "w") as f1:
                         await f1.write(json.dumps(a))    
             replyingto = None
+            is_nsfw = False
             if a["data"]["tweetResult"]["result"].get("__typename") and a["data"]["tweetResult"]["result"].get("__typename") == "TweetUnavailable":
                 if not os.path.exists("env.py"):
                     raise twitterdownloader.missingcredentials("no credentials detected, make an env.py file, put csrf token, guest_id, auth_token there")
@@ -212,6 +208,7 @@ class twitterdownloader:
                 author = result[1]
                 quoted_tweet = result[3]
                 replyingto = result[4]
+                is_nsfw = True
             else:
                 medias = a["data"]["tweetResult"]["result"]["legacy"]["entities"].get("media")
                 fulltext = a["data"]["tweetResult"]["result"]["legacy"].get('full_text')
@@ -232,9 +229,10 @@ class twitterdownloader:
                 fulltext = fulltext.encode('utf-16', 'surrogatepass').decode('utf-16')
             if not medias:
                 print("no medias found")
-                return {"caption": fulltext, "author": author, "quoted_tweet": quoted_tweet, "replying_to": replyingto}
+                return {"caption": fulltext, "author": author, "quoted_tweet": quoted_tweet, "replying_to": replyingto, "is_nsfw": is_nsfw}
             media_urls = []
             duration = 0
+            img = None
             for media in medias:
                 if media.get('type') == 'animated_gif':
                     media_urls.append((media['video_info']['variants'][0].get('url'), 0))
@@ -244,11 +242,11 @@ class twitterdownloader:
                     for variant in media["video_info"]["variants"]:
                         videos.append((variant["url"], variant.get('bitrate')))
                     media_urls.append(videos)
-                    continue
-                elif media.get("media_url_https"):
-                    media_urls.append(media.get("media_url_https"))
+                if media.get("media_url_https"):
+                    # media_urls.append(media.get("media_url_https"))
+                    img = media.get("media_url_https")
             if returnurl:
-                return {"mediaurls": media_urls, "author": author, "caption": fulltext, "quoted_tweet": quoted_tweet, "replying_to": replyingto}
+                return {"mediaurls": media_urls, "author": author, "caption": fulltext, "quoted_tweet": quoted_tweet, "replying_to": replyingto, "image": img, "is_nsfw": is_nsfw}
             filenames = []
             for mindex, media in enumerate(media_urls):
                 if isinstance(media, list):
@@ -300,7 +298,7 @@ class twitterdownloader:
                     filename = f'{author}-{round(datetime.now().timestamp())}-{mindex}.jpg'
                     filenames.append(filename)
                     await twitterdownloader.downloader(media, filename, session, proxy)
-            return {"filenames": filenames, "author": author, "caption": fulltext, "quoted_tweet": quoted_tweet, "replying_to": replyingto}
+            return {"filenames": filenames, "author": author, "caption": fulltext, "quoted_tweet": quoted_tweet, "replying_to": replyingto, "image": img, "is_nsfw": is_nsfw}
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
@@ -309,4 +307,4 @@ if __name__ == "__main__":
     parser.add_argument("-r", "--return-url", action="store_true", help="print urls of medias instead of download")
     parser.add_argument("-p", "--proxy", type=str, help="https/socks proxy to use")
     args = parser.parse_args()
-    print(json.dumps(asyncio.run(twitterdownloader.download(args.link, args.max_size, args.return_url, args.proxy))))
+    print(json.dumps(asyncio.run(twitterdownloader.download(args.link, args.max_size, args.return_url, args.proxy)), indent=4))
