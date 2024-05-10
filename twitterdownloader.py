@@ -2,6 +2,8 @@ import aiohttp, aiofiles, asyncio, re, datetime, os, json
 from tqdm.asyncio import tqdm
 from datetime import datetime
 from aiohttp_socks import ProxyConnector
+from html import unescape
+from emoji import emojize
 if not os.path.exists('features.json'):
     with open('features.json', 'w') as f1:
         f1.write("""{"responsive_web_graphql_exclude_directive_enabled":true,"verified_phone_label_enabled":false,"creator_subscriptions_tweet_preview_api_enabled":true,"responsive_web_graphql_timeline_navigation_enabled":true,"responsive_web_graphql_skip_user_profile_image_extensions_enabled":false,"c9s_tweet_anatomy_moderator_badge_enabled":true,"tweetypie_unmention_optimization_enabled":true,"responsive_web_edit_tweet_api_enabled":true,"graphql_is_translatable_rweb_tweet_is_translatable_enabled":true,"view_counts_everywhere_api_enabled":true,"longform_notetweets_consumption_enabled":true,"responsive_web_twitter_article_tweet_consumption_enabled":false,"tweet_awards_web_tipping_enabled":false,"freedom_of_speech_not_reach_fetch_enabled":true,"standardized_nudges_misinfo":true,"tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled":true,"rweb_video_timestamps_enabled":false,"longform_notetweets_rich_text_read_enabled":true,"longform_notetweets_inline_media_enabled":true,"responsive_web_media_download_video_enabled":false,"responsive_web_enhance_cards_enabled":false,"communities_web_enable_tweet_community_results_fetch":true,"tweet_with_visibility_results_prefer_gql_media_interstitial_enabled":true,"rweb_tipjar_consumption_enabled":true, "creator_subscriptions_quote_tweet_preview_enabled":true, "rweb_tipjar_consumption_enabled, creator_subscriptions_quote_tweet_preview_enabled": true}""")
@@ -226,7 +228,7 @@ class twitterdownloader:
                 if replying_to:
                     replyingto = await twitterdownloader.download(f'https://x.com/{a["data"]["tweetResult"]["result"]["legacy"].get("in_reply_to_screen_name")}/status/{replying_to}', returnurl=True, proxy=proxy)
             if fulltext:
-                fulltext = fulltext.encode('utf-16', 'surrogatepass').decode('utf-16')
+                fulltext = emojize(unescape(fulltext)).encode('utf-16', 'surrogatepass').decode('utf-16')
             if not medias:
                 print("no medias found")
                 return {"caption": fulltext, "author": author, "quoted_tweet": quoted_tweet, "replying_to": replyingto, "is_nsfw": is_nsfw}
@@ -307,4 +309,4 @@ if __name__ == "__main__":
     parser.add_argument("-r", "--return-url", action="store_true", help="print urls of medias instead of download")
     parser.add_argument("-p", "--proxy", type=str, help="https/socks proxy to use")
     args = parser.parse_args()
-    print(json.dumps(asyncio.run(twitterdownloader.download(args.link, args.max_size, args.return_url, args.proxy)), indent=4))
+    print(json.dumps(asyncio.run(twitterdownloader.download(args.link, args.max_size, args.return_url, args.proxy)), indent=4, ensure_ascii=False))
