@@ -2,3 +2,4 @@ aiohttp
 aiofiles
 tqdm
 aiohttp_socks
+emoji
