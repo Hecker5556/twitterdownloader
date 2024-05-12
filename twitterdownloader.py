@@ -4,6 +4,7 @@ from datetime import datetime
 from aiohttp_socks import ProxyConnector
 from html import unescape
 from emoji import emojize
+from datetime import datetime
 if not os.path.exists('features.json'):
     with open('features.json', 'w') as f1:
         f1.write("""{"responsive_web_graphql_exclude_directive_enabled":true,"verified_phone_label_enabled":false,"creator_subscriptions_tweet_preview_api_enabled":true,"responsive_web_graphql_timeline_navigation_enabled":true,"responsive_web_graphql_skip_user_profile_image_extensions_enabled":false,"c9s_tweet_anatomy_moderator_badge_enabled":true,"tweetypie_unmention_optimization_enabled":true,"responsive_web_edit_tweet_api_enabled":true,"graphql_is_translatable_rweb_tweet_is_translatable_enabled":true,"view_counts_everywhere_api_enabled":true,"longform_notetweets_consumption_enabled":true,"responsive_web_twitter_article_tweet_consumption_enabled":false,"tweet_awards_web_tipping_enabled":false,"freedom_of_speech_not_reach_fetch_enabled":true,"standardized_nudges_misinfo":true,"tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled":true,"rweb_video_timestamps_enabled":false,"longform_notetweets_rich_text_read_enabled":true,"longform_notetweets_inline_media_enabled":true,"responsive_web_media_download_video_enabled":false,"responsive_web_enhance_cards_enabled":false,"communities_web_enable_tweet_community_results_fetch":true,"tweet_with_visibility_results_prefer_gql_media_interstitial_enabled":true,"rweb_tipjar_consumption_enabled":true, "creator_subscriptions_quote_tweet_preview_enabled":true, "rweb_tipjar_consumption_enabled, creator_subscriptions_quote_tweet_preview_enabled": true}""")
@@ -124,7 +125,15 @@ class twitterdownloader:
         if reply:
             replyingto = await twitterdownloader.download(f'https://x.com/{tweet_results["legacy"].get("in_reply_to_screen_name")}/status/{reply}', returnurl=True, proxy=proxy)
         link = f"https://x.com/{author}/status/{tweet_results['legacy']['id_str']}"
-        return medias, author, fulltext, quoted_tweet, replyingto, link
+        date_posted = datetime.strptime(tweet_results['legacy'].get('created_at'), "%a %b %d %H:%M:%S %z %Y").timestamp()
+        bookmark_count = tweet_results['legacy'].get("bookmark_count")
+        likes = tweet_results['legacy'].get("favorite_count")
+        times_quoted = tweet_results['legacy'].get("quote_count")
+        times_replied = tweet_results['legacy'].get("reply_count")
+        times_retweeted = tweet_results['legacy'].get("retweet_count")
+        author_link = tweet_results["core"]["user_results"]["result"]["legacy"].get('url')
+        views = tweet_results['views']['count']
+        return medias, author, fulltext, quoted_tweet, replyingto, link, date_posted, bookmark_count, likes, times_quoted, times_replied, times_retweeted, author_link, views
     async def downloader(link: str, filename: str, session: aiohttp.ClientSession, proxy: str = None):
         async with aiofiles.open(filename, 'wb') as f1:
             async with session.get(link, proxy=proxy if proxy and proxy.startswith("https") else None) as r:
@@ -213,6 +222,14 @@ class twitterdownloader:
                 replyingto = result[4]
                 is_nsfw = True
                 original_link = result[5]
+                date_posted = result[6]
+                bookmark_count = result[7]
+                likes = result[8]
+                times_quoted = result[9]
+                times_replied = result[10]
+                times_retweeted = result[11]
+                author_link = result[12]
+                views = result[13]
             else:
                 medias = a["data"]["tweetResult"]["result"]["legacy"]["entities"].get("media")
                 fulltext = a["data"]["tweetResult"]["result"]["legacy"].get('full_text')
@@ -230,11 +247,23 @@ class twitterdownloader:
                 if replying_to:
                     replyingto = await twitterdownloader.download(f'https://x.com/{a["data"]["tweetResult"]["result"]["legacy"].get("in_reply_to_screen_name")}/status/{replying_to}', returnurl=True, proxy=proxy)
                 original_link = f'https://x.com/{author}/status/{a["data"]["tweetResult"]["result"]["legacy"].get("id_str")}'
+                date_posted = datetime.strptime(a["data"]["tweetResult"]["result"]["legacy"].get('created_at'), "%a %b %d %H:%M:%S %z %Y").timestamp()
+                bookmark_count = a["data"]["tweetResult"]["result"]["legacy"].get("bookmark_count")
+                likes = a["data"]["tweetResult"]["result"]["legacy"].get("favorite_count")
+                times_quoted = a["data"]["tweetResult"]["result"]["legacy"].get("quote_count")
+                times_replied = a["data"]["tweetResult"]["result"]["legacy"].get("reply_count")
+                times_retweeted = a["data"]["tweetResult"]["result"]["legacy"].get("retweet_count")
+                author_link = a["data"]["tweetResult"]["result"]["core"]["user_results"]["result"]["legacy"].get('url')
+                views = a["data"]["tweetResult"]["result"]['views']['count']
             if fulltext:
                 fulltext = emojize(unescape(fulltext)).encode('utf-16', 'surrogatepass').decode('utf-16')
             if not medias:
                 print("no medias found")
-                return {"caption": fulltext, "author": author, "quoted_tweet": quoted_tweet, "replying_to": replyingto, "is_nsfw": is_nsfw, "original_link": original_link}
+                return {"caption": fulltext, "author": author, "quoted_tweet": quoted_tweet, 
+                        "replying_to": replyingto, "is_nsfw": is_nsfw, "original_link": original_link,
+                        "date_posted": date_posted, "bookmark_count": bookmark_count, "likes": likes,
+                        "times_quoted": times_quoted, "times_replied": times_replied, "times_retweeted": times_retweeted,
+                        "author_link": author_link, "views": views}
             media_urls = []
             duration = 0
             img = None
@@ -251,7 +280,10 @@ class twitterdownloader:
                     # media_urls.append(media.get("media_url_https"))
                     img = media.get("media_url_https")
             if returnurl:
-                return {"mediaurls": media_urls, "author": author, "caption": fulltext, "quoted_tweet": quoted_tweet, "replying_to": replyingto, "image": img, "is_nsfw": is_nsfw, "original_link": original_link}
+                return {"mediaurls": media_urls, "author": author, "caption": fulltext, "quoted_tweet": quoted_tweet, "replying_to": replyingto, "image": img, "is_nsfw": is_nsfw, "original_link": original_link,
+                        "date_posted": date_posted, "bookmark_count": bookmark_count, "likes": likes,
+                        "times_quoted": times_quoted, "times_replied": times_replied, "times_retweeted": times_retweeted,
+                        "author_link": author_link, "views": views}
             filenames = []
             for mindex, media in enumerate(media_urls):
                 if isinstance(media, list):
@@ -303,7 +335,10 @@ class twitterdownloader:
                     filename = f'{author}-{round(datetime.now().timestamp())}-{mindex}.jpg'
                     filenames.append(filename)
                     await twitterdownloader.downloader(media, filename, session, proxy)
-            return {"filenames": filenames, "author": author, "caption": fulltext, "quoted_tweet": quoted_tweet, "replying_to": replyingto, "image": img, "is_nsfw": is_nsfw, "original_link": original_link}
+            return {"filenames": filenames, "author": author, "caption": fulltext, "quoted_tweet": quoted_tweet, "replying_to": replyingto, "image": img, "is_nsfw": is_nsfw, "original_link": original_link,
+                        "date_posted": date_posted, "bookmark_count": bookmark_count, "likes": likes,
+                        "times_quoted": times_quoted, "times_replied": times_replied, "times_retweeted": times_retweeted,
+                        "author_link": author_link, "views": views}
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
