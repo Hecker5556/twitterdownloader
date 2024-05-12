@@ -133,7 +133,8 @@ class twitterdownloader:
         times_retweeted = tweet_results['legacy'].get("retweet_count")
         author_link = tweet_results["core"]["user_results"]["result"]["legacy"].get('url')
         views = tweet_results['views']['count']
-        return medias, author, fulltext, quoted_tweet, replyingto, link, date_posted, bookmark_count, likes, times_quoted, times_replied, times_retweeted, author_link, views
+        profile_picture = tweet_results['core']['user_results']['result']['legacy'].get('profile_image_url_https')
+        return medias, author, fulltext, quoted_tweet, replyingto, link, date_posted, bookmark_count, likes, times_quoted, times_replied, times_retweeted, author_link, views, profile_picture
     async def downloader(link: str, filename: str, session: aiohttp.ClientSession, proxy: str = None):
         async with aiofiles.open(filename, 'wb') as f1:
             async with session.get(link, proxy=proxy if proxy and proxy.startswith("https") else None) as r:
@@ -230,6 +231,7 @@ class twitterdownloader:
                 times_retweeted = result[11]
                 author_link = result[12]
                 views = result[13]
+                profile_picture = result[14]
             else:
                 medias = a["data"]["tweetResult"]["result"]["legacy"]["entities"].get("media")
                 fulltext = a["data"]["tweetResult"]["result"]["legacy"].get('full_text')
@@ -255,6 +257,7 @@ class twitterdownloader:
                 times_retweeted = a["data"]["tweetResult"]["result"]["legacy"].get("retweet_count")
                 author_link = a["data"]["tweetResult"]["result"]["core"]["user_results"]["result"]["legacy"].get('url')
                 views = a["data"]["tweetResult"]["result"]['views']['count']
+                profile_picture = a["data"]["tweetResult"]["result"]["core"]["user_results"]["result"]["legacy"].get('profile_image_url_https')
             if fulltext:
                 fulltext = emojize(unescape(fulltext)).encode('utf-16', 'surrogatepass').decode('utf-16')
             if not medias:
@@ -263,7 +266,7 @@ class twitterdownloader:
                         "replying_to": replyingto, "is_nsfw": is_nsfw, "original_link": original_link,
                         "date_posted": date_posted, "bookmark_count": bookmark_count, "likes": likes,
                         "times_quoted": times_quoted, "times_replied": times_replied, "times_retweeted": times_retweeted,
-                        "author_link": author_link, "views": views}
+                        "author_link": author_link, "views": views, "profile_picture": profile_picture}
             media_urls = []
             duration = 0
             img = None
@@ -338,7 +341,7 @@ class twitterdownloader:
             return {"filenames": filenames, "author": author, "caption": fulltext, "quoted_tweet": quoted_tweet, "replying_to": replyingto, "image": img, "is_nsfw": is_nsfw, "original_link": original_link,
                         "date_posted": date_posted, "bookmark_count": bookmark_count, "likes": likes,
                         "times_quoted": times_quoted, "times_replied": times_replied, "times_retweeted": times_retweeted,
-                        "author_link": author_link, "views": views}
+                        "author_link": author_link, "views": views, "profile_picture": profile_picture}
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
