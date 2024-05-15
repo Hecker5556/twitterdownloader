@@ -131,7 +131,7 @@ class twitterdownloader:
         times_quoted = tweet_results['legacy'].get("quote_count")
         times_replied = tweet_results['legacy'].get("reply_count")
         times_retweeted = tweet_results['legacy'].get("retweet_count")
-        author_link = tweet_results["core"]["user_results"]["result"]["legacy"].get('url')
+        author_link = f'https://x.com/{tweet_results["core"]["user_results"]["result"]["legacy"]["screen_name"]}'
         views = tweet_results['views']['count']
         profile_picture = tweet_results['core']['user_results']['result']['legacy'].get('profile_image_url_https')
         return medias, author, fulltext, quoted_tweet, replyingto, link, date_posted, bookmark_count, likes, times_quoted, times_replied, times_retweeted, author_link, views, profile_picture
@@ -255,8 +255,8 @@ class twitterdownloader:
                 times_quoted = a["data"]["tweetResult"]["result"]["legacy"].get("quote_count")
                 times_replied = a["data"]["tweetResult"]["result"]["legacy"].get("reply_count")
                 times_retweeted = a["data"]["tweetResult"]["result"]["legacy"].get("retweet_count")
-                author_link = a["data"]["tweetResult"]["result"]["core"]["user_results"]["result"]["legacy"].get('url')
-                views = a["data"]["tweetResult"]["result"]['views']['count']
+                author_link = f'https://x.com/{a["data"]["tweetResult"]["result"]["core"]["user_results"]["result"]["legacy"]["screen_name"]}'
+                views = a["data"]["tweetResult"]["result"]['views'].get('count')
                 profile_picture = a["data"]["tweetResult"]["result"]["core"]["user_results"]["result"]["legacy"].get('profile_image_url_https')
             if fulltext:
                 fulltext = emojize(unescape(fulltext)).encode('utf-16', 'surrogatepass').decode('utf-16')
@@ -279,8 +279,9 @@ class twitterdownloader:
                     for variant in media["video_info"]["variants"]:
                         videos.append((variant["url"], variant.get('bitrate')))
                     media_urls.append(videos)
+                elif media.get('type') == 'photo':
+                    media_urls.append(media.get("media_url_https"))
                 if media.get("media_url_https"):
-                    # media_urls.append(media.get("media_url_https"))
                     img = media.get("media_url_https")
             if returnurl:
                 return {"mediaurls": media_urls, "author": author, "caption": fulltext, "quoted_tweet": quoted_tweet, "replying_to": replyingto, "image": img, "is_nsfw": is_nsfw, "original_link": original_link,
