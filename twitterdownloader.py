@@ -29,14 +29,13 @@ class twitterdownloader:
     async def get_api_url(session: aiohttp.ClientSession, link: str, headers: dict, proxy: str = None) -> tuple[str, str]:
         pattern = r'href=\"(https://abs\.twimg\.com/responsive-web/client-web/main\.(?:.*?)\.js)\"'
         async with session.get(link, headers=headers, proxy=proxy if proxy and proxy.startswith("https") else None) as r:
-            while True:
-                chunk = await r.content.read(1024*2)
-                if not chunk:
-                    break
-                decoded = chunk.decode("utf-8")
-                matches = re.findall(pattern, decoded)
-                if matches:
-                    break
+            text = await r.text('utf-8')
+            matches = re.findall(pattern ,text)
+        if not matches:
+            await twitterdownloader._post_data(session, link, headers, proxy)
+            async with session.get(link, headers=headers, proxy=proxy if proxy and proxy.startswith("https") else None) as r:
+                text = await r.text('utf-8')
+                matches = re.findall(pattern ,text)
         jslink = matches[0]
         pattern2 = r'{queryId:\"(.*?)\",operationName:\"TweetResultByRestId\"'
         pattern3 = r'queryId:\"(.*?)\",operationName:\"TweetDetail\"'
