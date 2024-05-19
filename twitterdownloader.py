@@ -52,8 +52,26 @@ class twitterdownloader:
         async with aiofiles.open("apiurls.json", "w") as f1:
             await f1.write(json.dumps(thejson))
         return restid, tweetdetail
-    async def get_bearer_token(session: aiohttp.ClientSession, link: str, headers: dict, proxy: str = None) -> str:
+    async def _post_data(session: aiohttp.ClientSession, link: str, headers: dict, proxy: str = None):
         async with session.get(link, headers=headers, proxy=proxy if proxy and proxy.startswith("https") else None) as r:
+            pattern_redirect = r"document\.location = \"(.*?)\"</script>"
+            text = await r.text()
+            matches = re.findall(pattern_redirect, text)[0]
+            async with session.get(matches, headers=headers, proxy=proxy if proxy and proxy.startswith("https") else None) as r:
+                tok = r"<input type=\"hidden\" name=\"tok\" value=\"(.*?)\" />"
+                text = await r.text()
+                tok = re.findall(r"<input type=\"hidden\" name=\"tok\" value=\"(.*?)\" />", text)[0]
+                data = re.findall(r"<input type=\"hidden\" name=\"data\" value=\"(.*?)\" />", text)[0]
+                refresh = re.findall(r"<meta http-equiv=\"refresh\" content=\"5; url = (.*?)\" />", text)[0]
+                payload = {"data": data, "tok": tok}
+                url = re.findall(r"<form action=\"(.*?)\"", text)[0]
+                async with session.post(url, data=json.dumps(payload), headers=headers, proxy=proxy if proxy and proxy.startswith("https") else None) as r:
+                    pass
+                async with session.get(refresh, headers=headers, proxy=proxy if proxy and proxy.startswith("https") else None) as r:
+                    pass
+    async def get_bearer_token(session: aiohttp.ClientSession, link: str, headers: dict, proxy: str = None) -> str:
+        await twitterdownloader._post_data(session, link, headers, proxy)
+        async with session.get(link, headers=headers, proxy=proxy if proxy and proxy.startswith("https") else None, params={"mx": 2}) as r:
             pattern = r'href=\"(https://abs\.twimg\.com/responsive-web/client-web/main\.(?:.*?)\.js)\"'
             text = await r.text()
             matches = re.findall(pattern, text)
