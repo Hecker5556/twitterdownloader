@@ -20,26 +20,29 @@ class twitterdownloader:
     class videotoobig(Exception):
         def __init__(self, *args: object) -> None:
             super().__init__(*args)
-    async def get_guest_token(session: aiohttp.ClientSession, headers: dict, proxy: str = None) -> str:
+    async def get_guest_token(self, session: aiohttp.ClientSession, headers: dict, proxy: str = None) -> str:
         async with session.post('https://api.twitter.com/1.1/guest/activate.json', headers=headers, proxy=proxy if proxy and proxy.startswith("https") else None) as r:
             a = await r.json()
             return a['guest_token']
-    def createconnector(proxy: str):
+    def createconnector(self, proxy: str):
         return aiohttp.TCPConnector() if (not proxy or proxy and proxy.startswith("sock")) else ProxyConnector.from_url(proxy)
-    async def get_api_url(session: aiohttp.ClientSession, link: str, headers: dict, proxy: str = None) -> tuple[str, str]:
-        pattern = r'href=\"(https://abs\.twimg\.com/responsive-web/client-web/main\.(?:.*?)\.js)\"'
-        async with session.get(link, headers=headers, proxy=proxy if proxy and proxy.startswith("https") else None) as r:
-            text = await r.text('utf-8')
-            matches = re.findall(pattern ,text)
-        if not matches:
-            await twitterdownloader._post_data(session, link, headers, proxy)
+    async def get_api_url(self, session: aiohttp.ClientSession, link: str, headers: dict, proxy: str = None) -> tuple[str, str]:
+        if not hasattr(self, "jslink"):
+            pattern = r'href=\"(https://abs\.twimg\.com/responsive-web/client-web/main\.(?:.*?)\.js)\"'
             async with session.get(link, headers=headers, proxy=proxy if proxy and proxy.startswith("https") else None) as r:
                 text = await r.text('utf-8')
                 matches = re.findall(pattern ,text)
-        jslink = matches[0]
+            if not matches:
+                await self._post_data(session, link, headers, proxy)
+                async with session.get(link, headers=headers, proxy=proxy if proxy and proxy.startswith("https") else None) as r:
+                    text = await r.text('utf-8')
+                    matches = re.findall(pattern ,text)
+            jslink = matches[0]
+        else:
+            jslink = self.jslink
         pattern2 = r'{queryId:\"(.*?)\",operationName:\"TweetResultByRestId\"'
         pattern3 = r'queryId:\"(.*?)\",operationName:\"TweetDetail\"'
-        async with session.get(jslink) as r:
+        async with session.get(jslink, headers=headers, proxy=proxy if proxy and proxy.startswith("https") else None) as r:
             js = await r.text()
         location1 = js[js.find("TweetResultByRestId")-50:js.find("TweetResultByRestId")+50]
         location2 = js[js.find("TweetDetail")-50:js.find("TweetDetail")+50]
@@ -51,7 +54,7 @@ class twitterdownloader:
         async with aiofiles.open("apiurls.json", "w") as f1:
             await f1.write(json.dumps(thejson))
         return restid, tweetdetail
-    async def _post_data(session: aiohttp.ClientSession, link: str, headers: dict, proxy: str = None):
+    async def _post_data(self, session: aiohttp.ClientSession, link: str, headers: dict, proxy: str = None):
         async with session.get(link, headers=headers, proxy=proxy if proxy and proxy.startswith("https") else None) as r:
             pattern_redirect = r"document\.location = \"(.*?)\"</script>"
             text = await r.text()
@@ -68,15 +71,16 @@ class twitterdownloader:
                     pass
                 async with session.get(refresh, headers=headers, proxy=proxy if proxy and proxy.startswith("https") else None) as r:
                     pass
-    async def get_bearer_token(session: aiohttp.ClientSession, link: str, headers: dict, proxy: str = None) -> str:
-        await twitterdownloader._post_data(session, link, headers, proxy)
+    async def get_bearer_token(self, session: aiohttp.ClientSession, link: str, headers: dict, proxy: str = None) -> str:
+        await self._post_data(session, link, headers, proxy)
         async with session.get(link, headers=headers, proxy=proxy if proxy and proxy.startswith("https") else None, params={"mx": 2}) as r:
             pattern = r'href=\"(https://abs\.twimg\.com/responsive-web/client-web/main\.(?:.*?)\.js)\"'
             text = await r.text()
             matches = re.findall(pattern, text)
             if not matches:
-                raise twitterdownloader.invalidlink("couldnt get bearer token javascript")
+                raise self.invalidlink("couldnt get bearer token javascript")
         jslink = matches[0]
+        self.jslink = jslink
         async with session.get(jslink, proxy=proxy if proxy and proxy.startswith("https") else None) as r:
             pattern = r'\"(Bearer (?:.*?))\"'
             while True:
@@ -87,11 +91,11 @@ class twitterdownloader:
                 if matches:
                     break
         if not matches:
-            raise twitterdownloader.invalidlink("invalid link idk")
+            raise self.invalidlink("invalid link idk")
         async with aiofiles.open("bearer_token.txt", "w") as f1:
             await f1.write(matches[0])
         return matches[0]
-    async def get_authenticated_tweet(tweet_id: int, csrf: str, guest_id: str, auth_token: str, bearer_token: str, session: aiohttp.ClientSession, apiurl: str, proxy: str = None):
+    async def get_authenticated_tweet(self, tweet_id: int, csrf: str, guest_id: str, auth_token: str, bearer_token: str, session: aiohttp.ClientSession, apiurl: str, proxy: str = None):
         cookies = {
             'guest_id': guest_id,
             'auth_token': auth_token,
@@ -140,7 +144,7 @@ class twitterdownloader:
         reply = tweet_results['legacy'].get("in_reply_to_status_id_str")
         replyingto = {}
         if reply:
-            replyingto = await twitterdownloader.download(f'https://x.com/{tweet_results["legacy"].get("in_reply_to_screen_name")}/status/{reply}', returnurl=True, proxy=proxy)
+            replyingto = await self.download(f'https://x.com/{tweet_results["legacy"].get("in_reply_to_screen_name")}/status/{reply}', returnurl=True, proxy=proxy)
         link = f"https://x.com/{author}/status/{tweet_results['legacy']['id_str']}"
         date_posted = datetime.strptime(tweet_results['legacy'].get('created_at'), "%a %b %d %H:%M:%S %z %Y").timestamp()
         bookmark_count = tweet_results['legacy'].get("bookmark_count")
@@ -152,7 +156,7 @@ class twitterdownloader:
         views = tweet_results['views']['count']
         profile_picture = tweet_results['core']['user_results']['result']['legacy'].get('profile_image_url_https')
         return medias, author, fulltext, quoted_tweet, replyingto, link, date_posted, bookmark_count, likes, times_quoted, times_replied, times_retweeted, author_link, views, profile_picture
-    async def downloader(link: str, filename: str, session: aiohttp.ClientSession, proxy: str = None):
+    async def downloader(self, link: str, filename: str, session: aiohttp.ClientSession, proxy: str = None):
         async with aiofiles.open(filename, 'wb') as f1:
             async with session.get(link, proxy=proxy if proxy and proxy.startswith("https") else None) as r:
                 total = int(r.headers.get('content-length'))
@@ -164,7 +168,7 @@ class twitterdownloader:
                     await f1.write(chunk)
                     progress.update(len(chunk))
                 progress.close()
-    async def download(link: str, maxsize: int = None, returnurl: bool = False, proxy: str = None):
+    async def download(self, link: str, maxsize: int = None, returnurl: bool = False, proxy: str = None):
         link = link.split('?')[0]
         pattern = r'https://(?:x)?(?:twitter)?\.com/(?:.*?)/status/(\d*?)/?$'
         pattern2 = r"https://(?:x)?(?:twitter)?\.com/(?:.*?)/status/(\d*?)/(?:.*?)/\d$"
@@ -172,7 +176,7 @@ class twitterdownloader:
         if not tweet_id:
             tweet_id = re.findall(pattern2, link)
             if not tweet_id:
-                raise twitterdownloader.invalidlink("the link is invalid i think")
+                raise self.invalidlink("the link is invalid i think")
         
         tweet_id = tweet_id[0]
         headers = {
@@ -188,21 +192,21 @@ class twitterdownloader:
             'variables': '{"tweetId":%s,"withCommunity":false,"includePromotedContent":false,"withVoice":false}' % tweet_id,
             'features': json.dumps(FEATURES)
         }
-        async with aiohttp.ClientSession(connector=twitterdownloader.createconnector(proxy)) as session:
+        async with aiohttp.ClientSession(connector=self.createconnector(proxy)) as session:
             if not os.path.exists("bearer_token.txt"):
-                bearer = await twitterdownloader.get_bearer_token(session, link, headers, proxy)
+                bearer = await self.get_bearer_token(session, link, headers, proxy)
             else:
                 async with aiofiles.open("bearer_token.txt", "r") as f1:
                     bearer = await f1.read()
             if not os.path.exists("apiurls.json"):
-                restid, tweetdetail = await twitterdownloader.get_api_url(session, link, headers, proxy)
+                restid, tweetdetail = await self.get_api_url(session, link, headers, proxy)
             else:
                 async with aiofiles.open("apiurls.json", "r") as f1:
                     thejson = await f1.read()
                     thejson = json.loads(thejson)
                     restid, tweetdetail = thejson["restid"], thejson["tweetdetail"]
             headers['authorization'] = bearer
-            guestoken = await twitterdownloader.get_guest_token(session, headers, proxy)
+            guestoken = await self.get_guest_token(session, headers, proxy)
             cookies = {
                 'gt': guestoken
             }
@@ -230,9 +234,9 @@ class twitterdownloader:
             is_nsfw = False
             if a["data"]["tweetResult"]["result"].get("__typename") and a["data"]["tweetResult"]["result"].get("__typename") == "TweetUnavailable":
                 if not os.path.exists("env.py"):
-                    raise twitterdownloader.missingcredentials("no credentials detected, make an env.py file, put csrf token, guest_id, auth_token there")
+                    raise self.missingcredentials("no credentials detected, make an env.py file, put csrf token, guest_id, auth_token there")
                 from env import csrf, auth_token, guest_id
-                result = await twitterdownloader.get_authenticated_tweet(tweet_id, csrf, guest_id, auth_token, bearer, session, tweetdetail, proxy)
+                result = await self.get_authenticated_tweet(tweet_id, csrf, guest_id, auth_token, bearer, session, tweetdetail, proxy)
                 medias = result[0]
                 fulltext = result[2]
                 author = result[1]
@@ -264,7 +268,7 @@ class twitterdownloader:
                 replying_to = a["data"]["tweetResult"]["result"]["legacy"].get("in_reply_to_status_id_str")
                 replyingto = {}
                 if replying_to:
-                    replyingto = await twitterdownloader.download(f'https://x.com/{a["data"]["tweetResult"]["result"]["legacy"].get("in_reply_to_screen_name")}/status/{replying_to}', returnurl=True, proxy=proxy)
+                    replyingto = await self.download(f'https://x.com/{a["data"]["tweetResult"]["result"]["legacy"].get("in_reply_to_screen_name")}/status/{replying_to}', returnurl=True, proxy=proxy)
                 original_link = f'https://x.com/{author}/status/{a["data"]["tweetResult"]["result"]["legacy"].get("id_str")}'
                 date_posted = datetime.strptime(a["data"]["tweetResult"]["result"]["legacy"].get('created_at'), "%a %b %d %H:%M:%S %z %Y").timestamp()
                 bookmark_count = a["data"]["tweetResult"]["result"]["legacy"].get("bookmark_count")
@@ -315,7 +319,7 @@ class twitterdownloader:
                                 continue
                             sizes[index] = ((((video[1] * duration) / 1000)/8) / (1024*1024)) * 0.9
                         if len(media) == 1:
-                            await twitterdownloader.downloader(media[0], filename, session, proxy)
+                            await self.downloader(media[0], filename, session, proxy)
                             continue
                         sizes = sorted(sizes.items(), key=lambda x: float(x[1]), reverse=True)
                         downloaded = False
@@ -324,16 +328,16 @@ class twitterdownloader:
                                 filename = f'{author}-{round(datetime.now().timestamp())}-{mindex}.mp4'
                                 filenames.append(filename)
                                 # print(media[index][0])
-                                await twitterdownloader.downloader(media[index][0], filename, session, proxy)
+                                await self.downloader(media[index][0], filename, session, proxy)
                                 downloaded = True
                                 break
                         if not downloaded:
-                            raise twitterdownloader.videotoobig("video too large to download")
+                            raise self.videotoobig("video too large to download")
                     else:
                         filename = f'{author}-{round(datetime.now().timestamp())}-{mindex}.mp4'
                         filenames.append(filename)
                         if len(media) == 1:
-                            await twitterdownloader.downloader(media[0], filename, session, proxy)
+                            await self.downloader(media[0], filename, session, proxy)
                             continue
                         resolutions = {}
                         pattern = r'((?:\d*?)x(?:\d*?))/'
@@ -347,15 +351,15 @@ class twitterdownloader:
                                 uh = uh * i
                             resolutions[index] = uh
                         resolutions = sorted(resolutions.items(), key=lambda x: x[1], reverse=True)
-                        await twitterdownloader.downloader(media[resolutions[0][0]][0], filename, session, proxy)
+                        await self.downloader(media[resolutions[0][0]][0], filename, session, proxy)
                 elif isinstance(media, tuple):
                     filename = f'{author}-{round(datetime.now().timestamp())}-{mindex}.mp4'
                     filenames.append(filename)
-                    await twitterdownloader.downloader(media[0], filename, session, proxy)
+                    await self.downloader(media[0], filename, session, proxy)
                 else:
                     filename = f'{author}-{round(datetime.now().timestamp())}-{mindex}.jpg'
                     filenames.append(filename)
-                    await twitterdownloader.downloader(media, filename, session, proxy)
+                    await self.downloader(media, filename, session, proxy)
             return {"filenames": filenames, "author": author, "caption": fulltext, "quoted_tweet": quoted_tweet, "replying_to": replyingto, "image": img, "is_nsfw": is_nsfw, "original_link": original_link,
                         "date_posted": date_posted, "bookmark_count": bookmark_count, "likes": likes,
                         "times_quoted": times_quoted, "times_replied": times_replied, "times_retweeted": times_retweeted,
@@ -368,4 +372,4 @@ if __name__ == "__main__":
     parser.add_argument("-r", "--return-url", action="store_true", help="print urls of medias instead of download")
     parser.add_argument("-p", "--proxy", type=str, help="https/socks proxy to use")
     args = parser.parse_args()
-    print(json.dumps(asyncio.run(twitterdownloader.download(args.link, args.max_size, args.return_url, args.proxy)), indent=4, ensure_ascii=False))
+    print(json.dumps(asyncio.run(twitterdownloader().download(args.link, args.max_size, args.return_url, args.proxy)), indent=4, ensure_ascii=False))
