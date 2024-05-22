@@ -141,6 +141,7 @@ class twitterdownloader:
                 quoted_tweet['media'] = [x.get('media_url_https') for x in q_media]
             quoted_tweet['caption'] = quoted["result"]["legacy"].get('full_text')
             quoted_tweet['author'] = "".join([x for x in quoted["result"]["core"]["user_results"]])
+            quoted_tweet['link'] = tweet_results['legacy'].get('quoted_status_permalink').get('expanded')
         reply = tweet_results['legacy'].get("in_reply_to_status_id_str")
         replyingto = {}
         if reply:
@@ -265,6 +266,7 @@ class twitterdownloader:
                         quoted_tweet['media'] = [x.get('media_url_https') for x in q_media]
                     quoted_tweet['caption'] = quoted["result"]["legacy"].get('full_text')
                     quoted_tweet['author'] = "".join([x for x in quoted["result"]["core"]["user_results"]["result"]["legacy"]["screen_name"] if x not in '\\/:*?"<>|()'])
+                    quoted_tweet['link'] = a["data"]["tweetResult"]["result"]['legacy'].get('quoted_status_permalink').get('expanded')
                 replying_to = a["data"]["tweetResult"]["result"]["legacy"].get("in_reply_to_status_id_str")
                 replyingto = {}
                 if replying_to:
