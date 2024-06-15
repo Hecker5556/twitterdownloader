@@ -256,7 +256,10 @@ class twitterdownloader:
                 profile_picture = result[14]
             else:
                 medias = a["data"]["tweetResult"]["result"]["legacy"]["entities"].get("media")
-                fulltext = a["data"]["tweetResult"]["result"]["legacy"].get('full_text')
+                if notetweet := a["data"]["tweetResult"]["result"].get("note_tweet"):
+                    fulltext = notetweet['note_tweet_results'].get("text")
+                else:
+                    fulltext = a["data"]["tweetResult"]["result"]["legacy"].get('full_text')
                 author = "".join([x for x in a["data"]["tweetResult"]["result"]["core"]["user_results"]["result"]["legacy"]["screen_name"] if x not in '\\/:*?"<>|()'])
                 quoted = a["data"]["tweetResult"]["result"].get("quoted_status_result")
                 quoted_tweet = {}
