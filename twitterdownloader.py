@@ -257,7 +257,7 @@ class twitterdownloader:
             else:
                 medias = a["data"]["tweetResult"]["result"]["legacy"]["entities"].get("media")
                 if notetweet := a["data"]["tweetResult"]["result"].get("note_tweet"):
-                    fulltext = notetweet['note_tweet_results'].get("text")
+                    fulltext = notetweet['note_tweet_results']['result'].get("text")
                 else:
                     fulltext = a["data"]["tweetResult"]["result"]["legacy"].get('full_text')
                 author = "".join([x for x in a["data"]["tweetResult"]["result"]["core"]["user_results"]["result"]["legacy"]["screen_name"] if x not in '\\/:*?"<>|()'])
