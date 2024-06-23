@@ -138,7 +138,7 @@ class twitterdownloader:
         if quoted:
             q_media = quoted["result"]["legacy"]["entities"].get("media")
             if q_media:
-                quoted_tweet['media'] = [x.get('media_url_https') for x in q_media]
+                quoted_tweet['media'] = [x.get('media_url_https') if not x.get('video_info') else x['video_info']['variants'][-1]['url'] for x in q_media]
             quoted_tweet['caption'] = quoted["result"]["legacy"].get('full_text')
             quoted_tweet['author'] = "".join([x for x in quoted["result"]["core"]["user_results"]])
             quoted_tweet['link'] = tweet_results['legacy'].get('quoted_status_permalink').get('expanded')
@@ -266,7 +266,7 @@ class twitterdownloader:
                 if quoted:
                     q_media = quoted["result"]["legacy"]["entities"].get("media")
                     if q_media:
-                        quoted_tweet['media'] = [x.get('media_url_https') for x in q_media]
+                        quoted_tweet['media'] = [x.get('media_url_https') if not x.get('video_info') else x.get('video_info').get('variants')[-1].get('url') for x in q_media ]
                     quoted_tweet['caption'] = quoted["result"]["legacy"].get('full_text')
                     quoted_tweet['author'] = "".join([x for x in quoted["result"]["core"]["user_results"]["result"]["legacy"]["screen_name"] if x not in '\\/:*?"<>|()'])
                     quoted_tweet['link'] = a["data"]["tweetResult"]["result"]['legacy'].get('quoted_status_permalink').get('expanded')
