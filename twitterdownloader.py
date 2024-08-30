@@ -218,7 +218,7 @@ class twitterdownloader:
                     thejson = await f1.read()
                     thejson = json.loads(thejson)
                     restid, tweetdetail = thejson["restid"], thejson["tweetdetail"]
-            headers['authorization'] = "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA"
+            headers['authorization'] = bearer
             guestoken = await self.get_guest_token(session, headers, proxy)
             cookies = {
                 'gt': guestoken
