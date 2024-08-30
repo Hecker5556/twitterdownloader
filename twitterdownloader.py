@@ -4,7 +4,9 @@ from datetime import datetime
 from aiohttp_socks import ProxyConnector
 from html import unescape
 from emoji import emojize
+from urllib.parse import quote
 from datetime import datetime
+from yarl import URL
 if not os.path.exists('features.json'):
     with open('features.json', 'w') as f1:
         f1.write("""{"responsive_web_graphql_exclude_directive_enabled":true,"verified_phone_label_enabled":false,"creator_subscriptions_tweet_preview_api_enabled":true,"responsive_web_graphql_timeline_navigation_enabled":true,"responsive_web_graphql_skip_user_profile_image_extensions_enabled":false,"c9s_tweet_anatomy_moderator_badge_enabled":true,"tweetypie_unmention_optimization_enabled":true,"responsive_web_edit_tweet_api_enabled":true,"graphql_is_translatable_rweb_tweet_is_translatable_enabled":true,"view_counts_everywhere_api_enabled":true,"longform_notetweets_consumption_enabled":true,"responsive_web_twitter_article_tweet_consumption_enabled":false,"tweet_awards_web_tipping_enabled":false,"freedom_of_speech_not_reach_fetch_enabled":true,"standardized_nudges_misinfo":true,"tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled":true,"rweb_video_timestamps_enabled":false,"longform_notetweets_rich_text_read_enabled":true,"longform_notetweets_inline_media_enabled":true,"responsive_web_media_download_video_enabled":false,"responsive_web_enhance_cards_enabled":false,"communities_web_enable_tweet_community_results_fetch":true,"tweet_with_visibility_results_prefer_gql_media_interstitial_enabled":true,"rweb_tipjar_consumption_enabled":true, "creator_subscriptions_quote_tweet_preview_enabled":true, "rweb_tipjar_consumption_enabled": true, "creator_subscriptions_quote_tweet_preview_enabled": true}""")
@@ -64,7 +66,7 @@ class twitterdownloader:
                 text = await r.text()
                 tok = re.findall(r"<input type=\"hidden\" name=\"tok\" value=\"(.*?)\" />", text)[0]
                 data = re.findall(r"<input type=\"hidden\" name=\"data\" value=\"(.*?)\" />", text)[0]
-                refresh = re.findall(r"<meta http-equiv=\"refresh\" content=\"5; url = (.*?)\" />", text)[0]
+                refresh = re.findall(r"<meta http-equiv=\"refresh\" content=\"\d+; url = (.*?)\" />", text)[0]
                 payload = {"data": data, "tok": tok}
                 url = re.findall(r"<form action=\"(.*?)\"", text)[0]
                 async with session.post(url, data=json.dumps(payload), headers=headers, proxy=proxy if proxy and proxy.startswith("https") else None) as r:
@@ -93,8 +95,8 @@ class twitterdownloader:
         if not matches:
             raise self.invalidlink("invalid link idk")
         async with aiofiles.open("bearer_token.txt", "w") as f1:
-            await f1.write(matches[0])
-        return matches[0]
+            await f1.write(matches[-1])
+        return matches[-1]
     async def get_authenticated_tweet(self, tweet_id: int, csrf: str, guest_id: str, auth_token: str, bearer_token: str, session: aiohttp.ClientSession, apiurl: str, proxy: str = None):
         cookies = {
             'guest_id': guest_id,
@@ -113,7 +115,7 @@ class twitterdownloader:
         params = {
             'variables': '{"focalTweetId":%s,"with_rux_injections":false,"includePromotedContent":true,"withCommunity":true,"withQuickPromoteEligibilityTweetFields":true,"withBirdwatchNotes":true,"withVoice":true,"withV2Timeline":true}' % tweet_id,
             'features': json.dumps(FEATURES),
-            'fieldToggles': '{"withArticleRichContentState":false}',
+            'fieldToggles': '{"withArticleRichContentState":true,"withArticlePlainText":false,"withGrokAnalyze":false,"withDisallowedReplyControls":false}',
         }
         async with session.get(apiurl, cookies=cookies, headers=headers, params=params, proxy=proxy if proxy and proxy.startswith("https") else None) as r:
             result = await r.json()
@@ -181,17 +183,27 @@ class twitterdownloader:
         
         tweet_id = tweet_id[0]
         headers = {
-            'authority': 'api.twitter.com',
             'accept': '*/*',
-            'accept-language': 'en-US,en;q=0.6',
+            'accept-language': 'en-US,en;q=0.7',
             'content-type': 'application/json',
-            'origin': 'https://twitter.com',
-            'referer': 'https://twitter.com/',
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'origin': 'https://x.com',
+            'priority': 'u=1, i',
+            'referer': 'https://x.com/',
+            'sec-ch-ua': '"Chromium";v="128", "Not;A=Brand";v="24", "Brave";v="128"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"Windows"',
+            'sec-fetch-dest': 'empty',
+            'sec-fetch-mode': 'cors',
+            'sec-fetch-site': 'same-site',
+            'sec-gpc': '1',
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+            'x-twitter-active-user': 'yes',
+            'x-twitter-client-language': 'en',
         }
         params = {
-            'variables': '{"tweetId":%s,"withCommunity":false,"includePromotedContent":false,"withVoice":false}' % tweet_id,
-            'features': json.dumps(FEATURES)
+            'variables': '{"tweetId":"%s","withCommunity":false,"includePromotedContent":false,"withVoice":false}' % tweet_id,
+            'features': json.dumps(FEATURES),
+            'fieldToggles': '{"withArticleRichContentState":true,"withArticlePlainText":false,"withGrokAnalyze":false,"withDisallowedReplyControls":false}',        
         }
         async with aiohttp.ClientSession(connector=self.createconnector(proxy)) as session:
             if not os.path.exists("bearer_token.txt"):
@@ -206,13 +218,13 @@ class twitterdownloader:
                     thejson = await f1.read()
                     thejson = json.loads(thejson)
                     restid, tweetdetail = thejson["restid"], thejson["tweetdetail"]
-            headers['authorization'] = bearer
+            headers['authorization'] = "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA"
             guestoken = await self.get_guest_token(session, headers, proxy)
             cookies = {
                 'gt': guestoken
             }
             headers['x-guest-token'] = guestoken
-            async with session.get(restid, cookies=cookies, headers=headers, params=params, proxy=proxy if proxy and proxy.startswith("https") else None) as r:
+            async with session.get(restid, cookies=cookies,params=params, headers=headers, proxy=proxy if proxy and proxy.startswith("https") else None) as r:
                 a = await r.json()
                 async with aiofiles.open("response.json", "w") as f1:
                     await f1.write(json.dumps(a))
@@ -233,7 +245,7 @@ class twitterdownloader:
                         await f1.write(json.dumps(a))    
             replyingto = None
             is_nsfw = False
-            if a["data"]["tweetResult"]["result"].get("__typename") and a["data"]["tweetResult"]["result"].get("__typename") == "TweetUnavailable":
+            if not a['data']['tweetResult'].get("result") or (a["data"]["tweetResult"]["result"].get("__typename") and a["data"]["tweetResult"]["result"].get("__typename") == "TweetUnavailable"):
                 if not os.path.exists("env.py"):
                     raise self.missingcredentials("no credentials detected, make an env.py file, put csrf token, guest_id, auth_token there")
                 from env import csrf, auth_token, guest_id
