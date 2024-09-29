@@ -131,6 +131,8 @@ class twitterdownloader:
             tweet_results = entry["content"]["items"][0]["item"]["itemContent"]["tweet_results"]["result"]
         else:
             tweet_results = entry["content"]["itemContent"]["tweet_results"]["result"]
+        if not tweet_results.get("legacy"):
+            tweet_results = tweet_results["tweet"]
         medias = tweet_results["legacy"]["entities"].get("media")
         author = tweet_results["core"]["user_results"]["result"]["legacy"]["screen_name"]
         author = "".join([x for x in author if x not in '\\/:*?"<>|()'])
