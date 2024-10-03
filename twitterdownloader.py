@@ -275,7 +275,7 @@ class twitterdownloader:
                 if not a["data"]["tweetResult"]["result"].get("legacy"):
                     if typename := a["data"]["tweetResult"]["result"].get("__typename"):
                         if "Tombstone" in typename:
-                            raise Exception(f"Errored! {a["data"]["tweetResult"]["result"]['tombstone']['text']['text']}")
+                            raise Exception(f"Errored! {a['data']['tweetResult']['result']['tombstone']['text']['text']}")
                 medias = a["data"]["tweetResult"]["result"]["legacy"]["entities"].get("media")
                 if notetweet := a["data"]["tweetResult"]["result"].get("note_tweet"):
                     fulltext = notetweet['note_tweet_results']['result'].get("text")
