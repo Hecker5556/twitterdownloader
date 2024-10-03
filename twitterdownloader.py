@@ -131,6 +131,9 @@ class twitterdownloader:
             tweet_results = entry["content"]["items"][0]["item"]["itemContent"]["tweet_results"]["result"]
         else:
             tweet_results = entry["content"]["itemContent"]["tweet_results"]["result"]
+        if typename := tweet_results.get("__typename"):
+            if "Tombstone" in typename:
+                raise Exception(f"Errored! {tweet_results['tombstone']['text']['text']}")
         if not tweet_results.get("legacy"):
             tweet_results = tweet_results["tweet"]
         medias = tweet_results["legacy"]["entities"].get("media")
@@ -269,6 +272,10 @@ class twitterdownloader:
                 views = result[13]
                 profile_picture = result[14]
             else:
+                if not a["data"]["tweetResult"]["result"].get("legacy"):
+                    if typename := a["data"]["tweetResult"]["result"].get("__typename"):
+                        if "Tombstone" in typename:
+                            raise Exception(f"Errored! {a["data"]["tweetResult"]["result"]['tombstone']['text']['text']}")
                 medias = a["data"]["tweetResult"]["result"]["legacy"]["entities"].get("media")
                 if notetweet := a["data"]["tweetResult"]["result"].get("note_tweet"):
                     fulltext = notetweet['note_tweet_results']['result'].get("text")
