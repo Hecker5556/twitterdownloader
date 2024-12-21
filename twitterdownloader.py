@@ -5,6 +5,7 @@ from html import unescape
 from typing import Literal
 import mimetypes
 from tqdm import tqdm
+import traceback
 LINKPATTERNS = [r'https://(?:x)?(?:twitter)?\.com/(?:.*?)/status/(\d*?)/?$', r'https://(?:x)?(?:twitter)?\.com/(?:.*?)/status/(\d*?)/(?:.*?)/\d$']
 if not os.path.exists('features.json'):
     with open('features.json', 'w') as f1:
@@ -458,7 +459,7 @@ class Grok(TwitterDownloader):
         return self
     async def __aexit__(self, a, b, c):
         if a:
-            pass
+            print(traceback.format_exception(a, b, c))
         await self.session.close()
     async def start_chat(self, ):
         if os.path.exists("queryIdcache.txt"):
