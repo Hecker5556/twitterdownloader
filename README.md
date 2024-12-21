@@ -2,19 +2,21 @@
 ## How it works
 This code uses the new v2 api twitter uses, and it uses guest authentication to fetch information about the tweet from the graphql api. It gets the authorization bearer from a main.js file and generates a guest token from the official api.
 
-Won't bother adding manifest downloading as there is no difference in formats and would take longer to download than a direct link.
-
 Gifs are stored as mp4, you can convert it to gifs with ffmpeg.
-
-Normal videos are tag 12, and longer videos are tag 14, but I haven't seen any difference in downloading or direct link storing (downloaded big movies with it no issue)
 
 Guest token expires, but bearer token doesn't, so its cached in a txt file to avoid unnecessary bandwidth.
 
 Accepts x.com and twitter.com links.
 
 Media links embed in discord but longer and bigger videos require embed bypass [https://discord.nfp.is](https://discord.nfp.is)
+
+Inserts captions into video if avaliable (using ffmpeg), if caption_videos is True, burns them in.
+
+Capability to download manifest (DASH) formats.
+
+New class Grok to start chats with and generate images with (requires authentication).
 ## Setup
-Python 3.10.9
+Written in Python 3.10.9
 ```bash
 git clone https://github.com/Hecker5556/twitterdownloader.git
 ```
@@ -40,17 +42,34 @@ options:
 ```
 
 ```python
-import sys
-if "path/to/twitterdownloader.py" not in sys.path:
-    sys.path.append("path/to/twitterdownloader.py")
-import twitterdownloader
-result = twitterdownloader.downloader("link", maxsize=None, returnurl=False)
-filenames = result.get("filenames")
-author = result.get("author")
-caption = result.get("caption")
+from twitterdownloader import TwitterDownloader
+import asyncio
+#non async
+def main_():
+    downloader = TwitterDownloader()
+    result = asyncio.run(downloader.download("https://x.com/BronzeAya/status/1869967014695141528"))
+    print(result)
+#async
+async def main():
+    downloader = TwitterDownloader()
+    result = await downloader.download("https://x.com/BronzeAya/status/1869967014695141528")
+    print(result)
+asyncio.run(main())
 ```
-
-## Get private/nsfw videos with authenticated fetching
+Grok
+```python
+from twitterdownloader import Grok
+import asyncio
+async def main():
+  async with Grok() as grok:
+    await grok.start_chat()
+    result = await grok.add_response("hi how are you")
+    print(result.get("message"))
+    if result.get("images"):
+      print(f"Following images have been generated:{a}{a.join([x.get('fileName') for x in result.get('images')])}")
+asyncio.run(main())
+```
+## Get private/nsfw videos with authenticated fetching / use grok
 ### Step 1. Create an env.py file in the same directory as the code, and put this there
 ```python
 guest_id = '' 
