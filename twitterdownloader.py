@@ -662,4 +662,4 @@ async def chatting():
             if response.get('images'):
                 print(f"Following images have been generated:{a}{a.join([x.get('fileName') for x in response.get('images')])}")
 if __name__ == "__main__":
-    asyncio.run(chatting())
+    asyncio.run(main())
