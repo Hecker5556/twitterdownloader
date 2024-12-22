@@ -355,7 +355,8 @@ class TwitterDownloader():
             info["nsfw"] = True
         return info
     async def _get_guest_token(self):
-        async with self.session.post('https://api.twitter.com/1.1/guest/activate.json', headers=self.headers, proxy=self.proxy) as r:
+        proxy = self.proxy if self.proxy and self.proxy.startswith("http") else None
+        async with self.session.post('https://api.twitter.com/1.1/guest/activate.json', headers=self.headers, proxy=proxy) as r:
             a = await r.json()
             return a['guest_token']
     async def _get_api_url(self):
