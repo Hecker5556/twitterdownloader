@@ -400,7 +400,7 @@ class TwitterDownloader():
                     matches = re.search(pattern, text)
                     if not matches:
                         raise Exception("couldnt get bearer token javascript")
-                self.jslink = matches.group(0)
+                self.jslink = matches.group(1)
                 async with self.session.get(self.jslink, proxy=proxy) as r:
                     pattern = r'\"(Bearer (?:.*?))\"'
                     while True:
@@ -414,6 +414,7 @@ class TwitterDownloader():
                     raise Exception(f"Couldn't find bearer token.")
                 with open("bearer_token.txt", "w") as f1:
                     f1.write(matches[-1])
+                self.bearer = matches[-1]
                 return matches
     async def _post_data(self):
         proxy = self.proxy if self.proxy and self.proxy.startswith("http") else None
