@@ -334,7 +334,7 @@ class TwitterDownloader():
         if quoted := tweet_results.get("quoted_status_result"):
             info["quoted"] = {}
             if quoted_media := quoted["result"]["legacy"]["entities"].get("media"):
-                info["quoted"]["media"] = [x.get('media_url_https') if not x.get('video_info') else x['video_info']['variants'][-1]['url'] for x in quoted_media]
+                info["quoted"]["media"] = await self._parse_media(quoted_media)
             info["quoted"]["full_text"] = unescape(quoted["result"]["legacy"].get('full_text'))
             info["quoted"]['author'] = {"username": "".join([x for x in quoted["result"]["core"]["user_results"]["result"]["legacy"]["screen_name"] if x not in '\\/:*?"<>|()']), 
                                         "nick": quoted["result"]["core"]["user_results"]["result"]["legacy"]["name"],
