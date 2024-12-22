@@ -378,8 +378,8 @@ class TwitterDownloader():
             js = await r.text()
         location1 = js[js.find("TweetResultByRestId")-50:js.find("TweetResultByRestId")+50]
         location2 = js[js.find("TweetDetail")-50:js.find("TweetDetail")+50]
-        restid = re.search(pattern2, location1).group()
-        tweetdetail = re.search(pattern3, location2).group()
+        restid = re.search(pattern2, location1).group(1)
+        tweetdetail = re.search(pattern3, location2).group(1)
         restid = f'https://api.twitter.com/graphql/{restid}/TweetResultByRestId'
         tweetdetail = f'https://twitter.com/i/api/graphql/{tweetdetail}/TweetDetail'
         thejson = {"restid": restid, "tweetdetail": tweetdetail}
