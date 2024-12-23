@@ -331,16 +331,20 @@ class TwitterDownloader():
             info["full_text"] = unescape(note_tweet['note_tweet_results']['result'].get("text"))
         else:
             info["full_text"] = unescape(tweet_results["legacy"]["full_text"])
-        if quoted := tweet_results.get("quoted_status_result"):
-            info["quoted"] = {}
-            if quoted_media := quoted["result"]["legacy"]["entities"].get("media"):
-                info["quoted"]["media"] = await self._parse_media(quoted_media)
-            info["quoted"]["full_text"] = unescape(quoted["result"]["legacy"].get('full_text'))
-            info["quoted"]['author'] = {"username": "".join([x for x in quoted["result"]["core"]["user_results"]["result"]["legacy"]["screen_name"] if x not in '\\/:*?"<>|()']), 
-                                        "nick": quoted["result"]["core"]["user_results"]["result"]["legacy"]["name"],
-                                        "link": f'https://x.com/{quoted["result"]["core"]["user_results"]["result"]["legacy"]["screen_name"]}',
-                                        "avatar": quoted["result"]['core']['user_results']['result']['legacy'].get('profile_image_url_https')}
-            info["quoted"]['link'] = tweet_results['legacy'].get('quoted_status_permalink').get('expanded')
+        quoted = None
+        if (quoted := tweet_results.get("quoted_status_result")) or tweet_results['legacy'].get("is_quote_status"):
+            if not quoted:
+                info["quoted"] = await self.download(tweet_results['legacy'].get('quoted_status_permalink').get('expanded'), return_media_url=True)
+            else:
+                info["quoted"] = {}
+                if quoted_media := quoted["result"]["legacy"]["entities"].get("media"):
+                    info["quoted"]["media"] = await self._parse_media(quoted_media)
+                info["quoted"]["full_text"] = unescape(quoted["result"]["legacy"].get('full_text'))
+                info["quoted"]['author'] = {"username": "".join([x for x in quoted["result"]["core"]["user_results"]["result"]["legacy"]["screen_name"] if x not in '\\/:*?"<>|()']), 
+                                            "nick": quoted["result"]["core"]["user_results"]["result"]["legacy"]["name"],
+                                            "link": f'https://x.com/{quoted["result"]["core"]["user_results"]["result"]["legacy"]["screen_name"]}',
+                                            "avatar": quoted["result"]['core']['user_results']['result']['legacy'].get('profile_image_url_https')}
+                info["quoted"]['link'] = tweet_results['legacy'].get('quoted_status_permalink').get('expanded')
         elif reply := tweet_results['legacy'].get("in_reply_to_status_id_str"):
             info["replying_to"] = await self.download(f'https://x.com/{tweet_results["legacy"].get("in_reply_to_screen_name")}/status/{reply}', return_media_url=True)
         info["link"] = f"https://x.com/{info['author']['username']}/status/{tweet_results['legacy']['id_str']}"
