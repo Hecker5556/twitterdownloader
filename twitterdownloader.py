@@ -240,36 +240,40 @@ class TwitterDownloader():
                 mdia['type'] = i['type']
                 mdia['thumbnail'] = i['media_url_https']
                 mdia['variants'] = {"direct": [], "dash": []}
-                duration = i['video_info']['duration_millis']/1000
-                for j in i['video_info']['variants']:
-                    if j['content_type'] == 'application/x-mpegURL':
-                        async with self.session.get(j["url"], proxy=proxy) as r:
-                            rtext = await r.text()
-                        subtitles_match = re.findall(subtitles_pattern, rtext)
-                        subtitles = []
-                        for group_id, name, url in subtitles_match:
-                            subtitles.append({"id": group_id, "name": name, "url": self.base_url + url})
-                        audios_match = re.findall(audios_pattern, rtext)
-                        audios = []
-                        for group_id, url in audios_match:
-                            audios.append({"id": group_id, "url": self.base_url + url})
-                        videos_match = re.findall(videos_pattern, rtext)
-                        videos = []
-                        for bitrate, width, height, codecs, subtitle, audio, url in videos_match:
-                            for sb in subtitles:
-                                if sb['id'] == subtitle:
-                                    subtitle = sb['url']
-                                    break
-                            for ad in audios:
-                                if ad['id'] == audio:
-                                    audio = ad['url']
-                                    break
-                            videos.append({"bitrate": int(bitrate), "height": height, "width": width, "codecs": codecs, "subtitle": subtitle, "audio": audio, "url": self.base_url + url, "size": ((int(bitrate)*duration)/8)*0.9, "size_mb": (((int(bitrate)*duration)/8)*0.9)/(1024*1024), "type": "dash"})
-                        mdia['variants']["dash"] += videos
-                    else:
-                        match = re.search(r"https://video\.twimg\.com/(?:ext_tw_video|amplify_video)/(?:.*?)vid/(?:.*?)/(\d+)x(\d+)/", j['url'])
-                        mdia['variants']["direct"].append({"bitrate": int(j['bitrate']), "url": j['url'], "height": match.group(2), "width": match.group(1), "size": (((int(j['bitrate']))*duration)/8)*0.9, "size_mb": (((int(j['bitrate']))*duration)/8)*0.9/(1024*1024), "type": "direct"})
-                mdia['variants'] = {"direct": list(sorted(mdia['variants']['direct'], key=lambda x: x.get('size'), reverse=True)), "dash": list(sorted(mdia['variants']['dash'], key=lambda x: x.get('size'), reverse=True))}
+                if i['type'] == 'video':
+                    duration = i['video_info']['duration_millis']/1000
+                    for j in i['video_info']['variants']:
+                        if j['content_type'] == 'application/x-mpegURL':
+                            async with self.session.get(j["url"], proxy=proxy) as r:
+                                rtext = await r.text()
+                            subtitles_match = re.findall(subtitles_pattern, rtext)
+                            subtitles = []
+                            for group_id, name, url in subtitles_match:
+                                subtitles.append({"id": group_id, "name": name, "url": self.base_url + url})
+                            audios_match = re.findall(audios_pattern, rtext)
+                            audios = []
+                            for group_id, url in audios_match:
+                                audios.append({"id": group_id, "url": self.base_url + url})
+                            videos_match = re.findall(videos_pattern, rtext)
+                            videos = []
+                            for bitrate, width, height, codecs, subtitle, audio, url in videos_match:
+                                for sb in subtitles:
+                                    if sb['id'] == subtitle:
+                                        subtitle = sb['url']
+                                        break
+                                for ad in audios:
+                                    if ad['id'] == audio:
+                                        audio = ad['url']
+                                        break
+                                videos.append({"bitrate": int(bitrate), "height": height, "width": width, "codecs": codecs, "subtitle": subtitle, "audio": audio, "url": self.base_url + url, "size": ((int(bitrate)*duration)/8)*0.9, "size_mb": (((int(bitrate)*duration)/8)*0.9)/(1024*1024), "type": "dash"})
+                            mdia['variants']["dash"] += videos
+                        else:
+                            match = re.search(r"https://video\.twimg\.com/(?:ext_tw_video|amplify_video)/(?:.*?)vid/(?:.*?)/(\d+)x(\d+)/", j['url'])
+                            mdia['variants']["direct"].append({"bitrate": int(j['bitrate']), "url": j['url'], "height": match.group(2), "width": match.group(1), "size": (((int(j['bitrate']))*duration)/8)*0.9, "size_mb": (((int(j['bitrate']))*duration)/8)*0.9/(1024*1024), "type": "direct"})
+                    mdia['variants'] = {"direct": list(sorted(mdia['variants']['direct'], key=lambda x: x.get('size'), reverse=True)), "dash": list(sorted(mdia['variants']['dash'], key=lambda x: x.get('size'), reverse=True))}
+                else:
+                    for j in i['video_info']['variants']:
+                        mdia['variants']["direct"].append({"bitrate": int(j['bitrate']), "url": j['url'], "height": i['sizes']['large']['h'], "width": i['sizes']['large']['w'], "size": None, "size_mb": None, "type": "direct"})
             elif i['type'] == 'photo':
                 mdia['type'] = i['type']
                 mdia['url'] = i['media_url_https']
@@ -655,7 +659,8 @@ async def main():
     parser.add_argument("-d", "--dash",default=False, action="store_true", help="download dash video format instead of direct")
     parser.add_argument("-c", "--caption", action="store_true", help="burn in twitter given captions into the video")
     args = parser.parse_args()
-    result = await TwitterDownloader(args.proxy).download(args.link, args.max_size, args.return_url, "dash" if args.dash else "direct", args.caption)
+    downloader = TwitterDownloader(args.proxy)
+    result = await downloader.download(args.link, args.max_size, args.return_url, "dash" if args.dash else "direct", args.caption)
     print(result)
 async def chatting():
     a = '\n'
