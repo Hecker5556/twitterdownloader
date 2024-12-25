@@ -120,7 +120,7 @@ class TwitterDownloader():
                     self.subtitles = media['variants']['dash'][0]['subtitle'] if not self.result.get('nsfw') and media['variants'].get('dash') else None
                     downloaded = False
                     for video in videos:
-                        if (max_size and video['size'] <= max_size*1024*1024) or (not max_size):
+                        if (not video.get('size')) or (max_size and video['size'] <= max_size*1024*1024) or (not max_size) :
                             filename = f"{self.result.get('author')['username']}-{int(datetime.now().timestamp())}-{idx}"
                             filename = await self._downloader(video if video_format == 'dash' else video['url'], filename, 'video_dash' if video_format == 'dash' else 'video_direct', caption=caption_videos)
                             self.filenames.append(filename)
