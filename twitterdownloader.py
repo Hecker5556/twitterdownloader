@@ -427,7 +427,7 @@ class TwitterDownloader():
                 return matches
     async def _post_data(self):
         proxy = self.proxy if self.proxy and self.proxy.startswith("http") else None
-        async with self.session.get(self.link, headers=self.headers, proxy=proxy) as r:
+        async with self.session.get(self.link if hasattr(self, 'link') else 'https://x.com', headers=self.headers, proxy=proxy) as r:
             pattern_redirect = r"document\.location = \"(.*?)\"</script>"
             text = await r.text()
             matches = re.search(pattern_redirect, text).group(1)
