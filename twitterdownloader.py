@@ -427,7 +427,25 @@ class TwitterDownloader():
                 return matches
     async def _post_data(self):
         proxy = self.proxy if self.proxy and self.proxy.startswith("http") else None
-        async with self.session.get(self.link if hasattr(self, 'link') else 'https://x.com', headers=self.headers, proxy=proxy) as r:
+        headers = self.headers if hasattr(self, 'headers') else {
+                'accept': '*/*',
+                'accept-language': 'en-US,en;q=0.7',
+                'content-type': 'application/json',
+                'origin': 'https://x.com',
+                'priority': 'u=1, i',
+                'referer': 'https://x.com/',
+                'sec-ch-ua': '"Chromium";v="128", "Not;A=Brand";v="24", "Brave";v="128"',
+                'sec-ch-ua-mobile': '?0',
+                'sec-ch-ua-platform': '"Windows"',
+                'sec-fetch-dest': 'empty',
+                'sec-fetch-mode': 'cors',
+                'sec-fetch-site': 'same-site',
+                'sec-gpc': '1',
+                'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+                'x-twitter-active-user': 'yes',
+                'x-twitter-client-language': 'en',
+            }
+        async with self.session.get(self.link if hasattr(self, 'link') else 'https://x.com', headers=headers, proxy=proxy) as r:
             pattern_redirect = r"document\.location = \"(.*?)\"</script>"
             text = await r.text()
             matches = re.search(pattern_redirect, text).group(1)
@@ -439,9 +457,9 @@ class TwitterDownloader():
                 refresh = re.search(r"<meta http-equiv=\"refresh\" content=\"\d+; url = (.*?)\" />", text).group(1)
                 payload = {"data": data, "tok": tok}
                 url = re.search(r"<form action=\"(.*?)\"", text).group(1)
-                async with self.session.post(url, data=json.dumps(payload), headers=self.headers, proxy=proxy) as r:
+                async with self.session.post(url, data=json.dumps(payload), headers=headers, proxy=proxy) as r:
                     pass
-                async with self.session.get(refresh, headers=self.headers, proxy=proxy) as r:
+                async with self.session.get(refresh, headers=headers, proxy=proxy) as r:
                     pass
 class Grok(TwitterDownloader):
     async def __aenter__(self):
