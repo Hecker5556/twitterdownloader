@@ -402,8 +402,27 @@ class TwitterDownloader():
                 return self.bearer
             else:
                 await self._post_data()
+                headers = self.headers if hasattr(self, 'headers') else {
+                                'accept': '*/*',
+                                'accept-language': 'en-US,en;q=0.7',
+                                'content-type': 'application/json',
+                                'origin': 'https://x.com',
+                                'priority': 'u=1, i',
+                                'referer': 'https://x.com/',
+                                'sec-ch-ua': '"Chromium";v="128", "Not;A=Brand";v="24", "Brave";v="128"',
+                                'sec-ch-ua-mobile': '?0',
+                                'sec-ch-ua-platform': '"Windows"',
+                                'sec-fetch-dest': 'empty',
+                                'sec-fetch-mode': 'cors',
+                                'sec-fetch-site': 'same-site',
+                                'sec-gpc': '1',
+                                'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+                                'x-twitter-active-user': 'yes',
+                                'x-twitter-client-language': 'en',
+                            }
+                link = self.link if hasattr(self, "link") else "https://x.com"
                 proxy = self.proxy if self.proxy and self.proxy.startswith("http") else None
-                async with self.session.get(self.link, headers=self.headers, proxy=proxy, params={"mx": 2}) as r:
+                async with self.session.get(link, headers=headers, proxy=proxy, params={"mx": 2}) as r:
                     pattern = r'href=\"(https://abs\.twimg\.com/responsive-web/client-web/main\.(?:.*?)\.js)\"'
                     text = await r.text()
                     matches = re.search(pattern, text)
