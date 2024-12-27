@@ -449,7 +449,7 @@ class TwitterDownloader():
             pattern_redirect = r"document\.location = \"(.*?)\"</script>"
             text = await r.text()
             matches = re.search(pattern_redirect, text).group(1)
-            async with self.session.get(matches, headers=self.headers, proxy=proxy) as r:
+            async with self.session.get(matches, headers=headers, proxy=proxy) as r:
                 tok = r"<input type=\"hidden\" name=\"tok\" value=\"(.*?)\" />"
                 text = await r.text()
                 tok = re.search(r"<input type=\"hidden\" name=\"tok\" value=\"(.*?)\" />", text).group(1)
