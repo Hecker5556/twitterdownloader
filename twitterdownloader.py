@@ -19,7 +19,7 @@ class TwitterDownloader():
         self.proxy = proxy
         self.debug = debug
         self.base_url = "https://video.twimg.com"
-        self.subtites = None
+        self.subtitles = None
     async def download(self, link: str, max_size: int = None, return_media_url: bool = False, video_format: Literal['direct', 'dash'] = 'direct', caption_videos: bool = False):
         self.tweet_id = None
         for ptn in LINKPATTERNS:
