@@ -19,6 +19,7 @@ class TwitterDownloader():
         self.proxy = proxy
         self.debug = debug
         self.base_url = "https://video.twimg.com"
+        self.subtites = None
     async def download(self, link: str, max_size: int = None, return_media_url: bool = False, video_format: Literal['direct', 'dash'] = 'direct', caption_videos: bool = False):
         self.tweet_id = None
         for ptn in LINKPATTERNS:
@@ -402,24 +403,21 @@ class TwitterDownloader():
                 return self.bearer
             else:
                 await self._post_data()
-                headers = self.headers if hasattr(self, 'headers') else {
-                                'accept': '*/*',
-                                'accept-language': 'en-US,en;q=0.7',
-                                'content-type': 'application/json',
-                                'origin': 'https://x.com',
-                                'priority': 'u=1, i',
-                                'referer': 'https://x.com/',
-                                'sec-ch-ua': '"Chromium";v="128", "Not;A=Brand";v="24", "Brave";v="128"',
-                                'sec-ch-ua-mobile': '?0',
-                                'sec-ch-ua-platform': '"Windows"',
-                                'sec-fetch-dest': 'empty',
-                                'sec-fetch-mode': 'cors',
-                                'sec-fetch-site': 'same-site',
-                                'sec-gpc': '1',
-                                'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-                                'x-twitter-active-user': 'yes',
-                                'x-twitter-client-language': 'en',
-                            }
+                headers = {
+                    'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                    'accept-language': 'en-US,en;q=0.8',
+                    'priority': 'u=0, i',
+                    'referer': 'https://x.com/',
+                    'sec-ch-ua': '"Brave";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+                    'sec-ch-ua-mobile': '?0',
+                    'sec-ch-ua-platform': '"Windows"',
+                    'sec-fetch-dest': 'document',
+                    'sec-fetch-mode': 'navigate',
+                    'sec-fetch-site': 'cross-site',
+                    'sec-gpc': '1',
+                    'upgrade-insecure-requests': '1',
+                    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+                }
                 link = self.link if hasattr(self, "link") else "https://x.com"
                 proxy = self.proxy if self.proxy and self.proxy.startswith("http") else None
                 async with self.session.get(link, headers=headers, proxy=proxy, params={"mx": 2}) as r:
@@ -446,24 +444,21 @@ class TwitterDownloader():
                 return matches
     async def _post_data(self):
         proxy = self.proxy if self.proxy and self.proxy.startswith("http") else None
-        headers = self.headers if hasattr(self, 'headers') else {
-                'accept': '*/*',
-                'accept-language': 'en-US,en;q=0.7',
-                'content-type': 'application/json',
-                'origin': 'https://x.com',
-                'priority': 'u=1, i',
-                'referer': 'https://x.com/',
-                'sec-ch-ua': '"Chromium";v="128", "Not;A=Brand";v="24", "Brave";v="128"',
-                'sec-ch-ua-mobile': '?0',
-                'sec-ch-ua-platform': '"Windows"',
-                'sec-fetch-dest': 'empty',
-                'sec-fetch-mode': 'cors',
-                'sec-fetch-site': 'same-site',
-                'sec-gpc': '1',
-                'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-                'x-twitter-active-user': 'yes',
-                'x-twitter-client-language': 'en',
-            }
+        headers = {
+            'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            'accept-language': 'en-US,en;q=0.8',
+            'priority': 'u=0, i',
+            'referer': 'https://x.com/',
+            'sec-ch-ua': '"Brave";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"Windows"',
+            'sec-fetch-dest': 'document',
+            'sec-fetch-mode': 'navigate',
+            'sec-fetch-site': 'cross-site',
+            'sec-gpc': '1',
+            'upgrade-insecure-requests': '1',
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        }
         async with self.session.get(self.link if hasattr(self, 'link') else 'https://x.com', headers=headers, proxy=proxy) as r:
             pattern_redirect = r"document\.location = \"(.*?)\"</script>"
             text = await r.text()
