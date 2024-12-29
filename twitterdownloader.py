@@ -269,7 +269,7 @@ class TwitterDownloader():
                                 videos.append({"bitrate": int(bitrate), "height": height, "width": width, "codecs": codecs, "subtitle": subtitle, "audio": audio, "url": self.base_url + url, "size": ((int(bitrate)*duration)/8)*0.9, "size_mb": (((int(bitrate)*duration)/8)*0.9)/(1024*1024), "type": "dash"})
                             mdia['variants']["dash"] += videos
                         else:
-                            match = re.search(r"https://video\.twimg\.com/(?:ext_tw_video|amplify_video)/(?:.*?)vid/(?:.*?)/(\d+)x(\d+)/", j['url'])
+                            match = re.search(r"https://video\.twimg\.com/(?:ext_tw_video|amplify_video)/(?:.*?)vid/(?:.*?)/?(\d+)x(\d+)/", j['url'])
                             mdia['variants']["direct"].append({"bitrate": int(j['bitrate']), "url": j['url'], "height": match.group(2), "width": match.group(1), "size": (((int(j['bitrate']))*duration)/8)*0.9, "size_mb": (((int(j['bitrate']))*duration)/8)*0.9/(1024*1024), "type": "direct"})
                     mdia['variants'] = {"direct": list(sorted(mdia['variants']['direct'], key=lambda x: x.get('size'), reverse=True)), "dash": list(sorted(mdia['variants']['dash'], key=lambda x: x.get('size'), reverse=True))}
                 else:
