@@ -594,6 +594,35 @@ class Grok(TwitterDownloader):
     async def add_response(self, message: str, file: str = None):
         if not self.started:
             raise Exception(f"Run start_chat() before adding a response. If manually using your own values, set the Grok object 'started' attribute to True")
+        if not hasattr(self, "bearer"):
+            await self._get_bearer_token()
+            from env import guest_id, auth_token, csrf
+            self.cookies = {
+            'dnt': '1',
+            'guest_id': guest_id,
+            'night_mode': '2',
+            'auth_token': auth_token,
+            'ct0': csrf,
+            'lang': 'en',
+            }
+            self.headers = {
+            'accept': '*/*',
+            'accept-language': 'en-US,en;q=0.8',
+            'authorization': self.bearer,
+            'content-type': 'application/json',
+            'origin': 'https://x.com',
+            'priority': 'u=1, i',
+            'referer': 'https://x.com/i/grok',
+            'sec-ch-ua': '"Brave";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"Windows"',
+            'sec-fetch-dest': 'empty',
+            'sec-fetch-mode': 'cors',
+            'sec-fetch-site': 'same-origin',
+            'sec-gpc': '1',
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+            'x-csrf-token': csrf,
+            }
         headers = {
             'sec-ch-ua-platform': '"Windows"',
             'authorization': self.bearer,
@@ -695,9 +724,11 @@ async def main():
     result = await downloader.download(args.link, args.max_size, args.return_url, "dash" if args.dash else "direct", args.caption)
     print(result)
 async def chatting():
+    """example function to chat with grok in console"""
     a = '\n'
     async with Grok() as grok:
         await grok.start_chat()
+        print("conversation id: ", grok.conversation_id,)
         while True:
             you = str(input("QUERY: "))
             response = await grok.add_response(you)
