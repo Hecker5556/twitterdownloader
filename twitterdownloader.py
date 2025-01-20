@@ -546,7 +546,7 @@ class Grok(TwitterDownloader):
 
             async with self.session.get("https://x.com/i/grok", proxy=proxy, headers=headers, cookies=self.cookies) as r:
                 rtext = await r.text("utf-8")
-            js_pattern = r"\"(shared~bundle\.Grok~bundle\.ReaderMode~bundle\.Birdwatch~bundle\.TwitterArticles~bundle\.Compose~bundle\.Settings~b)\":\"(.*?)\""
+            js_pattern = r"\"(shared~bundle\.(?:Grok~bundle\.)?ReaderMode~bundle\.Birdwatch~bundle\.TwitterArticles~bundle\.Compose~bundle\.Settings~b(?:.*?))\":\"(.*?)\""
             js_match = re.search(js_pattern, rtext)
             part_1 = js_match.group(1)
             part_2 = js_match.group(2)
