@@ -354,12 +354,12 @@ class TwitterDownloader():
             info["replying_to"] = await self.download(f'https://x.com/{tweet_results["legacy"].get("in_reply_to_screen_name")}/status/{reply}', return_media_url=True)
         info["link"] = f"https://x.com/{info['author']['username']}/status/{tweet_results['legacy']['id_str']}"
         info["date_posted"] = datetime.strptime(tweet_results['legacy'].get('created_at'), "%a %b %d %H:%M:%S %z %Y").timestamp()
-        info["bookmarks"] = tweet_results['legacy'].get("bookmark_count")
-        info["likes"] = tweet_results['legacy'].get("favorite_count")
-        info["quotes"] = tweet_results['legacy'].get("quote_count")
-        info["replies"] = tweet_results['legacy'].get("reply_count")
-        info["retweets"] = tweet_results['legacy'].get("retweet_count")
-        info["views"] = tweet_results['views']['count']
+        info["bookmarks"] = tweet_results['legacy'].get("bookmark_count", 0)
+        info["likes"] = tweet_results['legacy'].get("favorite_count", 0)
+        info["quotes"] = tweet_results['legacy'].get("quote_count", 0)
+        info["replies"] = tweet_results['legacy'].get("reply_count", 0)
+        info["retweets"] = tweet_results['legacy'].get("retweet_count", 0)
+        info["views"] = tweet_results['views'].get('count', 0)
         if tweet_results['legacy'].get("possibly_sensitive"):
             info["nsfw"] = True
         return info
