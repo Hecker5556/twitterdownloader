@@ -20,6 +20,7 @@ class TwitterDownloader():
         self.debug = debug
         self.base_url = "https://video.twimg.com"
         self.subtitles = None
+        self.no_ffmpeg = False
     async def download(self, link: str, max_size: int = None, return_media_url: bool = False, video_format: Literal['direct', 'dash'] = 'direct', caption_videos: bool = False):
         self.tweet_id = None
         for ptn in LINKPATTERNS:
@@ -163,7 +164,7 @@ class TwitterDownloader():
                         f1.write(chunk)
                         progress.update(len(chunk))
                 progress.close()
-            if type == 'video_direct' and self.subtitles:
+            if type == 'video_direct' and self.subtitles and not self.no_ffmpeg:
                 temp = os.path.splitext(filename+ext)[0] + "temp" + ext
                 os.rename(filename + ext, temp)
                 sub = await self._fetch_subs(self.subtitles)
