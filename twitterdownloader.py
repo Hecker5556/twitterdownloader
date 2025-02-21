@@ -484,12 +484,16 @@ class TwitterDownloader():
                 async with self.session.get(refresh, headers=headers, proxy=proxy) as r:
                     pass
 class Grok(TwitterDownloader):
+    def __init__(self, model: Literal['grok-3', 'grok-2a'] = 'grok-2a', img_gen_count: int = 4, *args):
+        self.model = model
+        self.img_gen_count = img_gen_count
+        super().__init__(*args)
     async def __aenter__(self):
         self.data = {"responses":
                     [
                     ],
                     "systemPromptName":"",
-                    "grokModelOptionId":"grok-2a",
+                    "grokModelOptionId":self.model,
                     "conversationId":None,
                     "returnSearchResults":True,
                     "returnCitations":True,
@@ -498,7 +502,7 @@ class Grok(TwitterDownloader):
                             "promptSource":"NATURAL",
                             "action":"INPUT"
                         },
-                    "imageGenerationCount":4,
+                    "imageGenerationCount":self.img_gen_count,
                     "requestFeatures":
                         {
                             "eagerTweets":True,
