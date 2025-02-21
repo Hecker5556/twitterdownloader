@@ -54,7 +54,7 @@ class TwitterDownloader():
             'features': json.dumps(FEATURES),
             'fieldToggles': '{"withArticleRichContentState":true,"withArticlePlainText":false,"withGrokAnalyze":false,"withDisallowedReplyControls":false}',        
         }
-        async with aiohttp.ClientSession(connector=self._give_connector(self.proxy)) as session:
+        async with aiohttp.ClientSession(connector=self._give_connector(self.proxy), max_field_size=9000) as session:
             if not hasattr(self, "session") or self.session.closed:
                 self.session = session
             await self._get_bearer_token()
@@ -484,7 +484,7 @@ class TwitterDownloader():
                 async with self.session.get(refresh, headers=headers, proxy=proxy) as r:
                     pass
 class Grok(TwitterDownloader):
-    def __init__(self, model: Literal['grok-3', 'grok-2a'] = 'grok-2a', img_gen_count: int = 4, *args):
+    def __init__(self, model: Literal['grok-3', 'grok-2'] = 'grok-2', img_gen_count: int = 4, *args):
         self.model = model
         self.img_gen_count = img_gen_count
         super().__init__(*args)
@@ -738,7 +738,7 @@ async def main():
 async def chatting():
     """example function to chat with grok in console"""
     a = '\n'
-    async with Grok() as grok:
+    async with Grok(model='grok-2') as grok:
         await grok.start_chat()
         print("conversation id: ", grok.conversation_id,)
         while True:
