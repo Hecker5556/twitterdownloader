@@ -497,6 +497,8 @@ class Grok(TwitterDownloader):
                     "conversationId":None,
                     "returnSearchResults":True,
                     "returnCitations":True,
+                    "isDeepsearch": False,
+                    'isReasoning': False,
                     "promptMetadata":
                         {
                             "promptSource":"NATURAL",
@@ -603,7 +605,7 @@ class Grok(TwitterDownloader):
             self.conversation_id = response["data"]["create_grok_conversation"]["conversation_id"]
             self.data["conversationId"] = self.conversation_id
         self.started = True
-    async def add_response(self, message: str, file: str = None):
+    async def add_response(self, message: str, file: str = None, deep_search: bool = False, reasoning:bool = False):
         if not self.started:
             raise Exception(f"Run start_chat() before adding a response. If manually using your own values, set the Grok object 'started' attribute to True")
         if not hasattr(self, "bearer"):
@@ -651,6 +653,8 @@ class Grok(TwitterDownloader):
                             "promptSource":"",
                             "fileAttachments":[]
                         })
+        self.data['isDeepsearch'] = deep_search
+        self.data['isReasoning'] = reasoning
         if file:
             if not os.path.exists(file):
                 if not file.startswith("http"):
@@ -688,8 +692,11 @@ class Grok(TwitterDownloader):
         finished = {}
         async with self.session.post('https://api.x.com/2/grok/add_response.json', headers=headers, data=json.dumps(self.data), cookies=self.cookies) as r:
             result = ""
-            json_results = []
+            # json_results = []
+            cited = None
             temp = bytearray()
+            start, end = None, None
+            thinking = ""
             while True:
                 chunk = await r.content.read(1)
                 if not chunk:
@@ -697,16 +704,33 @@ class Grok(TwitterDownloader):
                 temp += chunk
                 try:
                     a = json.loads(temp)
-                    json_results.append(a)
+                    if a.get("result") and a['result'].get("message"):
+                        if not a['result'].get('isThinking'):
+                            result += a['result']['message']
+                        else:
+                            thinking += a['result']['message']
+                            if not start:
+                                start = datetime.now()
+                    elif a.get("result") and a['result'].get("imageAttachment"):
+                        images.append(a['result']['imageAttachment'])
+                    if a.get("result") and a['result'].get("citedWebResults"):
+                        cited = a['result']["citedWebResults"]
+                    # json_results.append(a)
                     temp = bytearray()
                 except:
                     continue
             images = []
-            for i in json_results:
-                if i.get("result") and i['result'].get("message"):
-                    result += i['result']['message']
-                elif i.get('result') and i['result'].get("imageAttachment"):
-                    images.append(i['result']['imageAttachment'])
+            if start:
+                end = datetime.now()
+                finished['thinking_time'] = (end-start).seconds
+                finished["thinking"] = thinking
+            # with open("json_results.json", "w") as f1:
+            #     json.dump(json_results, f1, indent=4, ensure_ascii=False)
+            # for i in json_results:
+            #     if i.get("result") and i['result'].get("message"):
+            #         result += i['result']['message']
+            #     elif i.get('result') and i['result'].get("imageAttachment"):
+            #         images.append(i['result']['imageAttachment'])
             for img in images:
                 async with self.session.get(img['imageUrl'], cookies=self.cookies, headers=headers) as r:
                     with open(img['fileName'], 'wb') as f1:
@@ -720,6 +744,7 @@ class Grok(TwitterDownloader):
                             "message":result,
                             "sender":2,
                         })
+            finished["citedWebResults"] = cited
             finished["message"] = result
             return finished
 async def main():
@@ -738,14 +763,28 @@ async def main():
 async def chatting():
     """example function to chat with grok in console"""
     a = '\n'
-    async with Grok(model='grok-2') as grok:
+    async with Grok(model='grok-3') as grok:
         await grok.start_chat()
-        print("conversation id: ", grok.conversation_id,)
+        print("conversation id:", grok.conversation_id,)
+        deepsearch = False
+        reasoning = False
         while True:
-            you = str(input("QUERY: "))
-            response = await grok.add_response(you)
+            you = str(input(f"{'[deepsearch]' if deepsearch else ''}{'[reasoning]' if reasoning else ''}QUERY: "))
+            if you == "deepsearch":
+                deepsearch = True
+                continue
+            if you == "reasoning":
+                reasoning = True
+                continue
+            response = await grok.add_response(you, deep_search=deepsearch, reasoning=reasoning)
+            deepsearch = False
+            reasoning = False
             print("GROK: " + response['message'])
             if response.get('images'):
                 print(f"Following images have been generated:{a}{a.join([x.get('fileName') for x in response.get('images')])}")
+            if response.get("thinking"):
+                print(f"Grok thought for {response.get('thinking_time')} seconds")
+                print("Grok thought: ")
+                print(response.get("thinking"))
 if __name__ == "__main__":
-    asyncio.run(chatting())
+    asyncio.run(main())
