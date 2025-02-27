@@ -705,7 +705,7 @@ class Grok(TwitterDownloader):
                 try:
                     a = json.loads(temp)
                     if a.get("result") and a['result'].get("message"):
-                        if not a['result'].get('isThinking'):
+                        if not a['result'].get('isThinking') and not a['result'].get('messageTag'):
                             result += a['result']['message']
                         else:
                             thinking += a['result']['message']
