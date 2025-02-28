@@ -705,7 +705,7 @@ class Grok(TwitterDownloader):
                 try:
                     a = json.loads(temp)
                     if a.get("result") and a['result'].get("message"):
-                        if not a['result'].get('isThinking') and not a['result'].get('messageTag'):
+                        if not a['result'].get('isThinking') and a['result'].get("messageStepId", "final") == "final":
                             result += a['result']['message']
                         else:
                             thinking += a['result']['message']
@@ -724,8 +724,6 @@ class Grok(TwitterDownloader):
                 end = datetime.now()
                 finished['thinking_time'] = (end-start).seconds
                 finished["thinking"] = thinking
-            # with open("json_results.json", "w") as f1:
-            #     json.dump(json_results, f1, indent=4, ensure_ascii=False)
             # for i in json_results:
             #     if i.get("result") and i['result'].get("message"):
             #         result += i['result']['message']
