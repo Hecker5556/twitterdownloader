@@ -388,7 +388,7 @@ class TwitterDownloader():
                             async with self.session.get(self.link, headers=self.headers, proxy=proxy) as r:
                                 text = await r.text('utf-8')
                                 matches = re.search(pattern ,text)
-            self.jslink = matches.group()
+            self.jslink = matches.group(1)
         pattern2 = r'{queryId:\"(.*?)\",operationName:\"TweetResultByRestId\"'
         pattern3 = r'queryId:\"(.*?)\",operationName:\"TweetDetail\"'
         async with self.session.get(self.jslink, headers=self.headers, proxy=proxy) as r:
