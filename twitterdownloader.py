@@ -54,7 +54,7 @@ class TwitterDownloader():
             'features': json.dumps(FEATURES),
             'fieldToggles': '{"withArticleRichContentState":true,"withArticlePlainText":false,"withGrokAnalyze":false,"withDisallowedReplyControls":false}',        
         }
-        async with aiohttp.ClientSession(connector=self._give_connector(self.proxy), max_field_size=9000) as session:
+        async with aiohttp.ClientSession(connector=self._give_connector(self.proxy), max_field_size=10000) as session:
             if not hasattr(self, "session") or self.session.closed:
                 self.session = session
             await self._get_bearer_token()
@@ -515,7 +515,7 @@ class Grok(TwitterDownloader):
         return self
     async def __aexit__(self, a, b, c):
         if a:
-            print(traceback.format_exception(a, b, c))
+            print("".join(traceback.format_exception(a, b, c)))
         await self.session.close()
     async def start_chat(self, ):
         if os.path.exists("queryIdcache.txt"):
@@ -697,6 +697,7 @@ class Grok(TwitterDownloader):
             temp = bytearray()
             start, end = None, None
             thinking = ""
+            images = []
             while True:
                 chunk = await r.content.read(1)
                 if not chunk:
@@ -719,7 +720,7 @@ class Grok(TwitterDownloader):
                     temp = bytearray()
                 except:
                     continue
-            images = []
+            
             if start:
                 end = datetime.now()
                 finished['thinking_time'] = (end-start).seconds
