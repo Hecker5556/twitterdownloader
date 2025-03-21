@@ -15,7 +15,7 @@ with open("features.json", "r") as f1:
     FEATURES = json.load(f1)
 class TwitterDownloader():
     def _give_connector(self, proxy: str):
-        return aiohttp.TCPConnector() if not proxy or proxy.startswith("http") else ProxyConnector.from_url(proxy)
+        return aiohttp.TCPConnector() if not proxy else ProxyConnector.from_url(proxy)
     def __init__(self, proxy: str = None, debug: bool = False):
         self.proxy = proxy
         self.debug = debug
@@ -76,7 +76,7 @@ class TwitterDownloader():
                 self.cookies["gt"] = guestoken
             self.headers['x-guest-token'] = guestoken
             proxy = self.proxy if self.proxy and self.proxy.startswith("http") else None
-            async with self.session.get(self.restid, cookies=self.cookies,params=params, headers=self.headers, proxy=proxy) as r:
+            async with self.session.get(self.restid, cookies=self.cookies,params=params, headers=self.headers, ) as r:
                 a = await r.json()
                 if self.debug:
                     with open("response.json", "w") as f1:
@@ -93,7 +93,7 @@ class TwitterDownloader():
                     'variables': json.dumps({"tweetId":self.tweet_id,"withCommunity":False,"includePromotedContent":False,"withVoice":False}),
                     'features': json.dumps(FEATURES)
                 }
-                async with self.session.get(self.restid, cookies=self.cookies, headers=self.headers, params=params, proxy=proxy) as r:
+                async with self.session.get(self.restid, cookies=self.cookies, headers=self.headers, params=params, ) as r:
                     a = await r.json()
                     if self.debug:
                         with open("response.json", "w") as f1:
@@ -247,7 +247,7 @@ class TwitterDownloader():
                     duration = i['video_info']['duration_millis']/1000
                     for j in i['video_info']['variants']:
                         if j['content_type'] == 'application/x-mpegURL':
-                            async with self.session.get(j["url"], proxy=proxy) as r:
+                            async with self.session.get(j["url"], ) as r:
                                 rtext = await r.text()
                             subtitles_match = re.findall(subtitles_pattern, rtext)
                             subtitles = []
@@ -305,7 +305,7 @@ class TwitterDownloader():
             'features': json.dumps(FEATURES),
             'fieldToggles': '{"withArticleRichContentState":true,"withArticlePlainText":false,"withGrokAnalyze":false,"withDisallowedReplyControls":false}',
         }
-        async with self.session.get(self.tweetdetail, cookies=cookies, headers=headers, params=params, proxy=proxy) as r:
+        async with self.session.get(self.tweetdetail, cookies=cookies, headers=headers, params=params, ) as r:
             result = await r.json()
             if self.debug:
                 with open("response.json", "w") as f1:
@@ -367,32 +367,32 @@ class TwitterDownloader():
         return info
     async def _get_guest_token(self):
         proxy = self.proxy if self.proxy and self.proxy.startswith("http") else None
-        async with self.session.post('https://api.twitter.com/1.1/guest/activate.json', headers=self.headers, proxy=proxy) as r:
+        async with self.session.post('https://api.twitter.com/1.1/guest/activate.json', headers=self.headers, ) as r:
             a = await r.json()
             return a['guest_token']
     async def _get_api_url(self):
         proxy = self.proxy if self.proxy and self.proxy.startswith("http") else None
         if not hasattr(self, "jslink"):
             pattern = r'href=\"(https://abs\.twimg\.com/responsive-web/client-web/main\.(?:.*?)\.js)\"'
-            async with self.session.get(self.link, headers=self.headers, proxy=proxy) as r:
+            async with self.session.get(self.link, headers=self.headers, ) as r:
                 text = await r.text('utf-8')
                 matches = re.search(pattern ,text)
             if not matches:
                 await self._post_data()
-                async with self.session.get(self.link, headers=self.headers, proxy=proxy) as r:
+                async with self.session.get(self.link, headers=self.headers, ) as r:
                     text = await r.text('utf-8')
                     matches = re.search(pattern ,text)
                     if not matches:
                         if os.path.exists("bearer_token.txt"):
                             os.remove("bearer_token.txt")
                             await self._post_data()
-                            async with self.session.get(self.link, headers=self.headers, proxy=proxy) as r:
+                            async with self.session.get(self.link, headers=self.headers, ) as r:
                                 text = await r.text('utf-8')
                                 matches = re.search(pattern ,text)
             self.jslink = matches.group(1)
         pattern2 = r'{queryId:\"(.*?)\",operationName:\"TweetResultByRestId\"'
         pattern3 = r'queryId:\"(.*?)\",operationName:\"TweetDetail\"'
-        async with self.session.get(self.jslink, headers=self.headers, proxy=proxy) as r:
+        async with self.session.get(self.jslink, headers=self.headers, ) as r:
             js = await r.text()
         location1 = js[js.find("TweetResultByRestId")-50:js.find("TweetResultByRestId")+50]
         location2 = js[js.find("TweetDetail")-50:js.find("TweetDetail")+50]
@@ -429,14 +429,14 @@ class TwitterDownloader():
                 }
                 link = self.link if hasattr(self, "link") else "https://x.com"
                 proxy = self.proxy if self.proxy and self.proxy.startswith("http") else None
-                async with self.session.get(link, headers=headers, proxy=proxy, params={"mx": 2}) as r:
+                async with self.session.get(link, headers=headers, params={"mx": 2}) as r:
                     pattern = r'href=\"(https://abs\.twimg\.com/responsive-web/client-web/main\.(?:.*?)\.js)\"'
                     text = await r.text()
                     matches = re.search(pattern, text)
                     if not matches:
                         raise Exception("couldnt get bearer token javascript")
                 self.jslink = matches.group(1)
-                async with self.session.get(self.jslink, proxy=proxy) as r:
+                async with self.session.get(self.jslink, ) as r:
                     pattern = r'\"(Bearer (?:.*?))\"'
                     while True:
                         chunk = await r.content.read(1024*10)
@@ -468,11 +468,11 @@ class TwitterDownloader():
             'upgrade-insecure-requests': '1',
             'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
         }
-        async with self.session.get(self.link if hasattr(self, 'link') else 'https://x.com', headers=headers, proxy=proxy) as r:
+        async with self.session.get(self.link if hasattr(self, 'link') else 'https://x.com', headers=headers, ) as r:
             pattern_redirect = r"document\.location = \"(.*?)\"</script>"
             text = await r.text()
             matches = re.search(pattern_redirect, text).group(1)
-            async with self.session.get(matches, headers=headers, proxy=proxy) as r:
+            async with self.session.get(matches, headers=headers, ) as r:
                 tok = r"<input type=\"hidden\" name=\"tok\" value=\"(.*?)\" />"
                 text = await r.text()
                 tok = re.search(r"<input type=\"hidden\" name=\"tok\" value=\"(.*?)\" />", text).group(1)
@@ -480,9 +480,9 @@ class TwitterDownloader():
                 refresh = re.search(r"<meta http-equiv=\"refresh\" content=\"\d+; url = (.*?)\" />", text).group(1)
                 payload = {"data": data, "tok": tok}
                 url = re.search(r"<form action=\"(.*?)\"", text).group(1)
-                async with self.session.post(url, data=json.dumps(payload), headers=headers, proxy=proxy) as r:
+                async with self.session.post(url, data=json.dumps(payload), headers=headers, ) as r:
                     pass
-                async with self.session.get(refresh, headers=headers, proxy=proxy) as r:
+                async with self.session.get(refresh, headers=headers, ) as r:
                     pass
 class Grok(TwitterDownloader):
     def __init__(self, model: Literal['grok-3', 'grok-2'] = 'grok-2', img_gen_count: int = 4, *args):
@@ -557,22 +557,22 @@ class Grok(TwitterDownloader):
             'upgrade-insecure-requests': '1',
             'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
             }
-            proxy = self.proxy if self.proxy and self.proxy.startswith("http") else None
-
-            async with self.session.get("https://x.com/i/grok", proxy=proxy, headers=headers, cookies=self.cookies) as r:
+            async with self.session.get("https://x.com/i/grok", headers=headers, cookies=self.cookies) as r:
                 rtext = await r.text("utf-8")
-            js_pattern = r"\"(shared~bundle\.(?:Grok~bundle\.)?ReaderMode~bundle\.Birdwatch~bundle\.TwitterArticles~bundle\.Compose~bundle\.Settings~b(?:.*?))\":\"(.*?)\""
-            js_match = re.search(js_pattern, rtext)
-            part_1 = js_match.group(1)
-            part_2 = js_match.group(2)
+            js_pattern = r"\"(shared~bundle\.(?:Grok~bundle\.)?ReaderMode~bundle\.Birdwatch~bundle\.TwitterArticles~bundle\.Compose~bundle\.Settings~b(?:.*?))\": ?\"(.*?)\""
+            js_match = re.findall(js_pattern, rtext)
             base_url = "https://abs.twimg.com/responsive-web/client-web/"
-            async with self.session.get(base_url + part_1 + '.' + part_2 + "a" + ".js", proxy=proxy) as r:
-                js_text = await r.text("utf-8")
-            queryId_pattern = r":\"(.*?)\",operationName:\"CreateGrokConversation\",.*?}}"
-            js_text = js_text.split("queryId")
-            for i in js_text:
-                if queryId:=re.search(queryId_pattern, i):
-                    queryId = queryId.group(1)
+            queryId = None
+            for part_1, part_2 in js_match:
+                async with self.session.get(base_url + part_1 + '.' + part_2 + "a" + ".js", ) as r:
+                    js_text = await r.text("utf-8")
+                queryId_pattern = r":\"(.*?)\",operationName:\"CreateGrokConversation\",.*?}}"
+                js_text = js_text.split("queryId")
+                for i in js_text:
+                    if queryId:=re.search(queryId_pattern, i):
+                        queryId = queryId.group(1)
+                        break
+                if queryId:
                     break
             self.queryId = queryId
             with open("queryIdcache.txt", "w") as f1:
@@ -756,8 +756,9 @@ async def main():
     parser.add_argument("-p", "--proxy", type=str, help="https/socks proxy to use")
     parser.add_argument("-d", "--dash",default=False, action="store_true", help="download dash video format instead of direct")
     parser.add_argument("-c", "--caption", action="store_true", help="burn in twitter given captions into the video")
+    parser.add_argument("-dbg", "--debug", action="store_true", help="debug settings")
     args = parser.parse_args()
-    downloader = TwitterDownloader(args.proxy)
+    downloader = TwitterDownloader(args.proxy, args.debug)
     result = await downloader.download(args.link, args.max_size, args.return_url, "dash" if args.dash else "direct", args.caption)
     print(result)
 async def chatting():
