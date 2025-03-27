@@ -687,11 +687,11 @@ class Grok(TwitterDownloader):
                 'sec-ch-ua-mobile': '?0',
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
             }
-            async with self.session.post("https://x.com/i/api/2/grok/attachment.json", headers=_headers, cookies=self.cookies, data=data) as r:
+            async with self.session.post("https://grok.x.com/2/grok/attachment.json", headers=_headers, cookies=self.cookies, data=data) as r:
                 response = await r.json()
                 self.data["responses"][-1]["fileAttachments"] += response
         finished = {}
-        async with self.session.post('https://api.x.com/2/grok/add_response.json', headers=headers, data=json.dumps(self.data), cookies=self.cookies) as r:
+        async with self.session.post('https://grok.x.com/2/grok/add_response.json', headers=headers, data=json.dumps(self.data), cookies=self.cookies) as r:
             result = ""
             # json_results = []
             cited = None
