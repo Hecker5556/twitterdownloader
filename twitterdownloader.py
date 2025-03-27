@@ -662,7 +662,7 @@ class Grok(TwitterDownloader):
                     raise FileNotFoundError(f"Couldn't find {file}")
                 else:
                     async with self.session.get(file) as r:
-                        if "image" not in r.headers.get("content-type").lower() or "pdf" not in r.headers.get("content-type").lower():
+                        if "image" not in r.headers.get("content-type").lower() and "pdf" not in r.headers.get("content-type").lower():
                             raise ValueError(f"File must be an image")
                         ext = mimetypes.guess_extension(r.headers.get("content-type"))
                         file = f"grok_file-{int(datetime.now().timestamp())}{ext}"
@@ -672,7 +672,7 @@ class Grok(TwitterDownloader):
                                 if not chunk:
                                     break
                                 f1.write(chunk)
-            if "image" not in mimetypes.guess_type(file)[0].lower() or "pdf" not in mimetypes.guess_type(file)[0].lower():
+            if "image" not in mimetypes.guess_type(file)[0].lower() and "pdf" not in mimetypes.guess_type(file)[0].lower():
                 raise ValueError(f"File must be an image")
             data = aiohttp.FormData()
             data.add_field("image", open(file, 'rb'), content_type=mimetypes.guess_type(file)[0])
@@ -689,8 +689,13 @@ class Grok(TwitterDownloader):
             }
             async with self.session.post("https://grok.x.com/2/grok/attachment.json", headers=_headers, cookies=self.cookies, data=data) as r:
                 response = await r.json()
+                if self.debug:
+                    print(response)
                 self.data["responses"][-1]["fileAttachments"] += response
         finished = {}
+        if self.debug:
+            print("sending:")
+            print(self.data)
         async with self.session.post('https://grok.x.com/2/grok/add_response.json', headers=headers, data=json.dumps(self.data), cookies=self.cookies) as r:
             result = ""
             # json_results = []
@@ -706,6 +711,8 @@ class Grok(TwitterDownloader):
                 temp += chunk
                 try:
                     a = json.loads(temp)
+                    if self.debug:
+                        print(a)
                     if a.get("result") and a['result'].get("message"):
                         if not a['result'].get('isThinking') and a['result'].get("messageStepId", "final") == "final":
                             result += a['result']['message']
