@@ -490,28 +490,28 @@ class Grok(TwitterDownloader):
         self.img_gen_count = img_gen_count
         super().__init__(*args)
     async def __aenter__(self):
-        self.data = {"responses":
-                    [
-                    ],
-                    "systemPromptName":"",
-                    "grokModelOptionId":self.model,
-                    "conversationId":None,
-                    "returnSearchResults":True,
-                    "returnCitations":True,
-                    "isDeepsearch": False,
-                    'isReasoning': False,
-                    "promptMetadata":
-                        {
-                            "promptSource":"NATURAL",
-                            "action":"INPUT"
-                        },
-                    "imageGenerationCount":self.img_gen_count,
-                    "requestFeatures":
-                        {
-                            "eagerTweets":True,
-                            "serverHistory":True
-                        }
-                }
+        self.data = {
+            "responses": [
+            ],
+            "systemPromptName": "",
+            "grokModelOptionId": self.model,
+            "conversationId": None,
+            "returnSearchResults": True,
+            "returnCitations": True,
+            "promptMetadata": {
+                "promptSource": "NATURAL",
+                "action": "INPUT"
+            },
+            "imageGenerationCount": 4,
+            "requestFeatures": {
+                "eagerTweets": True,
+                "serverHistory": True
+            },
+            "enableSideBySide": True,
+            "toolOverrides": {},
+            "isDeepsearch": False,
+            "isReasoning": False
+            }
         self.started = False
         return self
     async def __aexit__(self, a, b, c):
@@ -627,7 +627,7 @@ class Grok(TwitterDownloader):
             'content-type': 'application/json',
             'origin': 'https://x.com',
             'priority': 'u=1, i',
-            'referer': 'https://x.com/i/grok',
+            'referer': 'https://x.com',
             'sec-ch-ua': '"Brave";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
             'sec-ch-ua-mobile': '?0',
             'sec-ch-ua-platform': '"Windows"',
@@ -646,6 +646,7 @@ class Grok(TwitterDownloader):
             'sec-ch-ua': '"Brave";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
             'x-twitter-client-language': 'en',
             'sec-ch-ua-mobile': '?0',
+            'x-client-transaction-id': 'gUKiIbzVFKlQFRVuFixSiyAy801YTuw2mNPAWL1cdDwM6Gz2EyXkE1Nio7a/oeZbHdg7GYKl0oTf9quztoIZg8kHmxKMgg',
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
         }
         self.data["responses"].append({
@@ -681,7 +682,7 @@ class Grok(TwitterDownloader):
                 'x-csrf-token': self.headers.get("x-csrf-token"),
                 'authorization': self.bearer,
                 'Referer': 'https://x.com/i/grok',
-
+                'x-client-transaction-id': 'gUKiIbzVFKlQFRVuFixSiyAy801YTuw2mNPAWL1cdDwM6Gz2EyXkE1Nio7a/oeZbHdg7GYKl0oTf9quztoIZg8kHmxKMgg',
                 'sec-ch-ua': '"Brave";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
                 'x-twitter-client-language': 'en',
                 'sec-ch-ua-mobile': '?0',
@@ -697,6 +698,12 @@ class Grok(TwitterDownloader):
             print("sending:")
             print(self.data)
         async with self.session.post('https://grok.x.com/2/grok/add_response.json', headers=headers, data=json.dumps(self.data), cookies=self.cookies) as r:
+            if self.debug:
+                print("sent headers:")
+                temp_head = {}
+                for key, value in r.request_info.headers.items():
+                    temp_head[key] = value
+                print(temp_head)
             result = ""
             # json_results = []
             cited = None
