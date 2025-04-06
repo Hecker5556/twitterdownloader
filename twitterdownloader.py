@@ -663,8 +663,13 @@ class Grok(TwitterDownloader):
                     raise FileNotFoundError(f"Couldn't find {file}")
                 else:
                     async with self.session.get(file) as r:
-                        if "image" not in r.headers.get("content-type").lower() and "pdf" not in r.headers.get("content-type").lower():
-                            raise ValueError(f"File must be an image")
+                        accepted = ["image", "pdf", "json"]
+                        proper = False
+                        for i in accepted:
+                            if i in r.headers.get("content-type").lower():
+                                proper = True
+                        if not proper: 
+                            raise ValueError(f"File must be an image/pdf/json")
                         ext = mimetypes.guess_extension(r.headers.get("content-type"))
                         file = f"grok_file-{int(datetime.now().timestamp())}{ext}"
                         with open(file, "wb") as f1:
