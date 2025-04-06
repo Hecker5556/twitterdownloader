@@ -678,8 +678,14 @@ class Grok(TwitterDownloader):
                                 if not chunk:
                                     break
                                 f1.write(chunk)
-            if "image" not in mimetypes.guess_type(file)[0].lower() and "pdf" not in mimetypes.guess_type(file)[0].lower():
-                raise ValueError(f"File must be an image")
+            else:
+                accepted = ["image", "pdf", "json"]
+                proper = False
+                for i in accepted:
+                    if i in mimetypes.guess_type(file)[0].lower():
+                        proper = True
+                if not proper:
+                    raise ValueError(f"File must be an image/pdf/json")
             data = aiohttp.FormData()
             data.add_field("image", open(file, 'rb'), content_type=mimetypes.guess_type(file)[0])
             _headers = {
