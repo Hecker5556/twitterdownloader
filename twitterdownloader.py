@@ -292,16 +292,16 @@ class TwitterDownloader():
             'ct0': self.csrf,
         }
         headers = {
-            'authority': 'twitter.com',
             'accept': '*/*',
             'accept-language': 'en-US,en;q=0.7',
             'authorization': self.bearer,
             'content-type': 'application/json',
             'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'x-client-transaction-id': 'vNp7SpUdb/FGDO01i/rsWlo/CJ08dDa46XZM2iFhy4YgnD9T/Tef3+9BV+P57c1TEcViAb9jiVhofKwc0KFYfWieOg2Pvw',
             'x-csrf-token': self.csrf,
         }
         params = {
-            'variables': json.dumps({"focalTweetId":self.tweet_id,"with_rux_injections":False,"includePromotedContent":True,"withCommunity":True,"withQuickPromoteEligibilityTweetFields":True,"withBirdwatchNotes":True,"withVoice":True,"withV2Timeline":True}),
+            'variables': json.dumps({"focalTweetId":self.tweet_id,"with_rux_injections":False,"rankingMode":"Relevance","includePromotedContent":True,"withCommunity":True,"withQuickPromoteEligibilityTweetFields":True,"withBirdwatchNotes":True,"withVoice":True}),
             'features': json.dumps(FEATURES),
             'fieldToggles': '{"withArticleRichContentState":true,"withArticlePlainText":false,"withGrokAnalyze":false,"withDisallowedReplyControls":false}',
         }
@@ -398,8 +398,8 @@ class TwitterDownloader():
         location2 = js[js.find("TweetDetail")-50:js.find("TweetDetail")+50]
         restid = re.search(pattern2, location1).group(1)
         tweetdetail = re.search(pattern3, location2).group(1)
-        restid = f'https://api.twitter.com/graphql/{restid}/TweetResultByRestId'
-        tweetdetail = f'https://twitter.com/i/api/graphql/{tweetdetail}/TweetDetail'
+        restid = f'https://api.x.com/graphql/{restid}/TweetResultByRestId'
+        tweetdetail = f'https://x.com/i/api/graphql/{tweetdetail}/TweetDetail'
         thejson = {"restid": restid, "tweetdetail": tweetdetail}
         with open("apiurls.json", "w") as f1:
             json.dump(thejson, f1)
@@ -777,14 +777,14 @@ async def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("link", help="link to twitter post")
     parser.add_argument("-m", "--max-size", type=float, help="max size in mb of a video")
-    parser.add_argument("-r", "--return-url", action="store_true", help="returns urls of medias instead of download")
+    parser.add_argument("-r", "--return-url", action="store_true", help="returns urls of medias instead of download", default=False)
     parser.add_argument("-p", "--proxy", type=str, help="https/socks proxy to use")
     parser.add_argument("-d", "--dash",default=False, action="store_true", help="download dash video format instead of direct")
     parser.add_argument("-c", "--caption", action="store_true", help="burn in twitter given captions into the video")
     parser.add_argument("-dbg", "--debug", action="store_true", help="debug settings")
     args = parser.parse_args()
     downloader = TwitterDownloader(args.proxy, args.debug)
-    result = await downloader.download(args.link, args.max_size, args.return_url, "dash" if args.dash else "direct", args.caption)
+    result = await downloader.download(link = args.link, max_size=args.max_size, return_media_url=args.return_url,video_format= "dash" if args.dash else "direct",caption_videos= args.caption)
     print(result)
 async def chatting():
     """example function to chat with grok in console"""
