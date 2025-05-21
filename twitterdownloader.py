@@ -334,6 +334,8 @@ class TwitterDownloader():
                         "nick": tweet_results["core"]["user_results"]["result"]["legacy"]["name"],
                         "link": f'https://x.com/{tweet_results["core"]["user_results"]["result"]["legacy"]["screen_name"]}',
                         "avatar": tweet_results['core']['user_results']['result']['legacy'].get('profile_image_url_https')}
+        if not info['author'].get('avatar'):
+            info['author']['avatar'] = tweet_results['core']['user_results']['result']['avatar'].get('image_url')
         if note_tweet := tweet_results.get("note_tweet"):
             info["full_text"] = unescape(note_tweet['note_tweet_results']['result'].get("text"))
         else:
