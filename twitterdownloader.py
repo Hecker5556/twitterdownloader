@@ -75,7 +75,7 @@ class TwitterDownloader():
             else:
                 self.cookies["gt"] = guestoken
             self.headers['x-guest-token'] = guestoken
-            proxy = self.proxy if self.proxy and self.proxy.startswith("http") else None
+            
             async with self.session.get(self.restid, cookies=self.cookies,params=params, headers=self.headers, ) as r:
                 a = await r.json()
                 if self.debug:
@@ -233,7 +233,7 @@ class TwitterDownloader():
 
     async def _parse_media(self, media: dict):
         medias = []
-        proxy = self.proxy if self.proxy and self.proxy.startswith("http") else None
+        
         subtitles_pattern = r"\#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"(.*?)\",NAME=\"(.*?)\",(?:.*?)URI=\"(.*?)\""
         audios_pattern = r"#EXT-X-MEDIA:NAME=\"Audio\",TYPE=AUDIO,GROUP-ID=\"(.*?)\",AUTOSELECT=YES,URI=\"(.*?)\""
         videos_pattern = r"#EXT-X-STREAM-INF:AVERAGE-BANDWIDTH=(?:\d+?),BANDWIDTH=(\d+),RESOLUTION=(\d+)x(\d+),CODECS=\"(.*?)\",SUBTITLES=\"(.*?)\",AUDIO=\"(.*?)\"\n(.*?)\n"
@@ -285,7 +285,7 @@ class TwitterDownloader():
             medias.append(mdia)
         return medias
     async def _get_authenticated_tweet(self):
-        proxy = self.proxy if self.proxy and self.proxy.startswith("http") else None
+        
         cookies = {
             'guest_id': self.guest_id,
             'auth_token': self.auth_token,
@@ -366,12 +366,12 @@ class TwitterDownloader():
             info["nsfw"] = True
         return info
     async def _get_guest_token(self):
-        proxy = self.proxy if self.proxy and self.proxy.startswith("http") else None
-        async with self.session.post('https://api.twitter.com/1.1/guest/activate.json', headers=self.headers, ) as r:
+        
+        async with self.session.post('https://api.x.com/1.1/guest/activate.json', headers=self.headers, ) as r:
             a = await r.json()
             return a['guest_token']
     async def _get_api_url(self):
-        proxy = self.proxy if self.proxy and self.proxy.startswith("http") else None
+        
         if not hasattr(self, "jslink"):
             pattern = r'href=\"(https://abs\.twimg\.com/responsive-web/client-web/main\.(?:.*?)\.js)\"'
             async with self.session.get(self.link, headers=self.headers, ) as r:
@@ -428,7 +428,7 @@ class TwitterDownloader():
                     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
                 }
                 link = self.link if hasattr(self, "link") else "https://x.com"
-                proxy = self.proxy if self.proxy and self.proxy.startswith("http") else None
+                
                 async with self.session.get(link, headers=headers, params={"mx": 2}) as r:
                     pattern = r'href=\"(https://abs\.twimg\.com/responsive-web/client-web/main\.(?:.*?)\.js)\"'
                     text = await r.text()
@@ -452,7 +452,7 @@ class TwitterDownloader():
                 self.bearer = matches[-1]
                 return matches
     async def _post_data(self):
-        proxy = self.proxy if self.proxy and self.proxy.startswith("http") else None
+        
         headers = {
             'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
             'accept-language': 'en-US,en;q=0.8',
