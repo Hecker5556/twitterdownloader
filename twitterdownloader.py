@@ -330,9 +330,9 @@ class TwitterDownloader():
         info['medias'] = tweet_results["legacy"]["entities"].get("media")
 
 
-        info['author'] = {"username": "".join([x for x in tweet_results["core"]["user_results"]["result"]["legacy"]["screen_name"] if x not in '\\/:*?"<>|()']),
-                        "nick": tweet_results["core"]["user_results"]["result"]["legacy"]["name"],
-                        "link": f'https://x.com/{tweet_results["core"]["user_results"]["result"]["legacy"]["screen_name"]}',
+        info['author'] = {"username": "".join([x for x in tweet_results["core"]["user_results"]["result"]["core"]["screen_name"] if x not in '\\/:*?"<>|()']),
+                        "nick": tweet_results["core"]["user_results"]["result"]["core"]["name"],
+                        "link": f'https://x.com/{tweet_results["core"]["user_results"]["result"]["core"]["screen_name"]}',
                         "avatar": tweet_results['core']['user_results']['result']['legacy'].get('profile_image_url_https')}
         if not info['author'].get('avatar'):
             info['author']['avatar'] = tweet_results['core']['user_results']['result']['avatar'].get('image_url')
