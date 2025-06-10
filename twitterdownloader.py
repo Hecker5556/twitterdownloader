@@ -325,17 +325,56 @@ class TwitterDownloader():
         if not tweet_results.get("legacy"):
             tweet_results = tweet_results["tweet"]
         return await self._tweet_result_parser(tweet_results)
+    @staticmethod
+    def _find_key(obj, searching_for: str, not_null: bool = True):
+        path = []
+        if isinstance(obj, dict):
+            for key, value in obj.items():
+                if key == searching_for:
+                    if not_null and value:
+                        path.append(key)
+                        return path
+                    elif not not_null:
+                        path.append(key)
+                        return path
+                result = TwitterDownloader._find_key(value, searching_for, not_null)
+                if result:
+                    path.append(key)
+                    path += result
+                    return path
+        elif isinstance(obj, list):
+            for index, i in enumerate(obj):
+                result = TwitterDownloader._find_key(i, searching_for, not_null)
+                if result:
+                    path.append(index)
+                    path += result
+                    return path
+        return path
+    @staticmethod
+    def _path_parser(path):
+        templist = []
+        for i in path:
+            if isinstance(i, str):
+                templist.append(f"['{i}']")
+            elif isinstance(i, int):
+                templist.append(f"[{i}]")
+        return ''.join(templist)
     async def _tweet_result_parser(self, tweet_results: dict) -> dict:
         info = {}
-        info['medias'] = tweet_results["legacy"]["entities"].get("media")
+        info['medias'] = eval(f"tweet_results['legacy']{self._path_parser(self._find_key(tweet_results['legacy'], 'media'))}")
 
+        username = eval(f"tweet_results{self._path_parser(self._find_key(tweet_results, 'screen_name'))}")
+        info['author'] = {"username": "".join([x for x in username if x not in '\\/:*?"<>|()']),
+                        "nick": eval(f"tweet_results{self._path_parser(self._find_key(tweet_results, 'name'))}"),
+                        "link": f'https://x.com/{username}',
+                        "avatar": None}
 
-        info['author'] = {"username": "".join([x for x in tweet_results["core"]["user_results"]["result"]["core"]["screen_name"] if x not in '\\/:*?"<>|()']),
-                        "nick": tweet_results["core"]["user_results"]["result"]["core"]["name"],
-                        "link": f'https://x.com/{tweet_results["core"]["user_results"]["result"]["core"]["screen_name"]}',
-                        "avatar": tweet_results['core']['user_results']['result']['legacy'].get('profile_image_url_https')}
-        if not info['author'].get('avatar'):
-            info['author']['avatar'] = tweet_results['core']['user_results']['result']['avatar'].get('image_url')
+        attempt = self._find_key(tweet_results, 'profile_image_url_https')
+        if not attempt:
+            info['author']['avatar'] = eval(f"tweet_results{self._path_parser(self._find_key(tweet_results, 'image_url'))}")
+        else:
+            info['author']['avatar'] = eval(f"tweet_results{self._path_parser(attempt)}")
+
         if note_tweet := tweet_results.get("note_tweet"):
             info["full_text"] = unescape(note_tweet['note_tweet_results']['result'].get("text"))
         else:
@@ -345,14 +384,21 @@ class TwitterDownloader():
             if not quoted:
                 info["quoted"] = await self.download(tweet_results['legacy'].get('quoted_status_permalink').get('expanded'), return_media_url=True)
             else:
+
                 info["quoted"] = {}
+                username = eval(f"quoted{self._path_parser(self._find_key(quoted, 'screen_name'))}")
                 if quoted_media := quoted["result"]["legacy"]["entities"].get("media"):
                     info["quoted"]["medias"] = await self._parse_media(quoted_media)
                 info["quoted"]["full_text"] = unescape(quoted["result"]["legacy"].get('full_text'))
-                info["quoted"]['author'] = {"username": "".join([x for x in quoted["result"]["core"]["user_results"]["result"]["legacy"]["screen_name"] if x not in '\\/:*?"<>|()']), 
-                                            "nick": quoted["result"]["core"]["user_results"]["result"]["legacy"]["name"],
-                                            "link": f'https://x.com/{quoted["result"]["core"]["user_results"]["result"]["legacy"]["screen_name"]}',
-                                            "avatar": quoted["result"]['core']['user_results']['result']['legacy'].get('profile_image_url_https')}
+                info["quoted"]['author'] = {"username": "".join([x for x in username if x not in '\\/:*?"<>|()']), 
+                                            "nick": eval(f"quoted{self._path_parser(self._find_key(quoted, 'name'))}"),
+                                            "link": f'https://x.com/{username}',
+                                            "avatar": None}
+                attempt = self._find_key(quoted, 'profile_image_url_https')
+                if attempt:
+                    info['quoted']['author']['avatar'] = eval(f"quoted{self._path_parser(attempt)}")
+                else:
+                    info['quoted']['author']['avatar'] = eval(f"quoted{self._path_parser(self._find_key(quoted, 'image_url'))}")
                 info["quoted"]['link'] = tweet_results['legacy'].get('quoted_status_permalink').get('expanded')
         elif reply := tweet_results['legacy'].get("in_reply_to_status_id_str"):
             info["replying_to"] = await self.download(f'https://x.com/{tweet_results["legacy"].get("in_reply_to_screen_name")}/status/{reply}', return_media_url=True)
@@ -368,6 +414,13 @@ class TwitterDownloader():
             info["nsfw"] = True
         return info
     async def _get_guest_token(self):
+        if os.path.exists("guesttoken.txt"):
+            with open("guesttoken.txt", "r") as f1:
+                a = f1.read().split("\t")
+                guesttoken = a[0]
+                expiry = a[1]
+                if datetime.fromisoformat(expiry)>datetime.now():
+                    return guesttoken
         headers = {
             'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
             'accept-language': 'en-US,en;q=0.7',
@@ -390,7 +443,9 @@ class TwitterDownloader():
                 if not chunk:
                     break
                 if (match := re.search(pattern, chunk.decode("utf-8"))):
-                    return match.group(1)
+                    guesttoken = match.group(1)
+                    with open("guesttoken.txt", "w") as f1:
+                        f1.write(f"{guesttoken}\t{(datetime.now()+timedelta(seconds=9000)).isoformat()}")
         return None
     async def _get_api_url(self):
         
@@ -807,7 +862,7 @@ async def main():
     args = parser.parse_args()
     downloader = TwitterDownloader(args.proxy, args.debug)
     result = await downloader.download(link = args.link, max_size=args.max_size, return_media_url=args.return_url,video_format= "dash" if args.dash else "direct",caption_videos= args.caption)
-    print(result)
+    print(json.dumps(result, indent=4, ensure_ascii=False))
 async def chatting():
     """example function to chat with grok in console"""
     a = '\n'
