@@ -449,7 +449,12 @@ class TwitterDownloader():
                 with open("guesttoken.txt", "w") as f1:
                     f1.write(f"{guesttoken}\t{(datetime.now()+timedelta(seconds=900)).isoformat()}")
             else:
-                print("couldnt find guest token")
+                async with self.session.get("https://x.com", headers=headers) as r:
+                    response = await r.text("utf8")
+                    if (match := re.search(pattern, response)):
+                        guesttoken = match.group(1)
+                        with open("guesttoken.txt", "w") as f1:
+                            f1.write(f"{guesttoken}\t{(datetime.now()+timedelta(seconds=900)).isoformat()}")
         return None
     async def _get_api_url(self):
         
