@@ -438,14 +438,11 @@ class TwitterDownloader():
         }
         pattern = r"document\.cookie=\"gt=(\d+);"
         async with self.session.get("https://x.com", headers=headers) as r:
-            while True:
-                chunk = await r.content.read(1024)
-                if not chunk:
-                    break
-                if (match := re.search(pattern, chunk.decode("utf-8"))):
-                    guesttoken = match.group(1)
-                    with open("guesttoken.txt", "w") as f1:
-                        f1.write(f"{guesttoken}\t{(datetime.now()+timedelta(seconds=9000)).isoformat()}")
+            response = await r.text("utf8")
+            if (match := re.search(pattern, response)):
+                guesttoken = match.group(1)
+                with open("guesttoken.txt", "w") as f1:
+                    f1.write(f"{guesttoken}\t{(datetime.now()+timedelta(seconds=9000)).isoformat()}")
         return None
     async def _get_api_url(self):
         
