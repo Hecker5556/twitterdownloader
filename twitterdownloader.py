@@ -82,6 +82,8 @@ class TwitterDownloader():
                     with open("response.json", "w") as f1:
                         json.dump(a, f1)
             if not a.get('data'):
+                if a['errors'][0]['message'] == "Bad guest token":
+                    os.remove("guesttoken.txt")
                 new_features = a['errors'][0]['message'].split(': ')[1].split(', ')
                 for ft in new_features:
                     if self.debug:
@@ -361,8 +363,11 @@ class TwitterDownloader():
         return ''.join(templist)
     async def _tweet_result_parser(self, tweet_results: dict) -> dict:
         info = {}
-        info['medias'] = eval(f"tweet_results['legacy']{self._path_parser(self._find_key(tweet_results['legacy'], 'media'))}")
-
+        attempt = self._find_key(tweet_results['legacy'], 'media')
+        if attempt:
+            info['medias'] = eval(f"tweet_results['legacy']{self._path_parser(attempt)}")
+        else:
+            info['medias'] = {}
         username = eval(f"tweet_results{self._path_parser(self._find_key(tweet_results, 'screen_name'))}")
         info['author'] = {"username": "".join([x for x in username if x not in '\\/:*?"<>|()']),
                         "nick": eval(f"tweet_results{self._path_parser(self._find_key(tweet_results, 'name'))}"),
@@ -442,7 +447,9 @@ class TwitterDownloader():
             if (match := re.search(pattern, response)):
                 guesttoken = match.group(1)
                 with open("guesttoken.txt", "w") as f1:
-                    f1.write(f"{guesttoken}\t{(datetime.now()+timedelta(seconds=9000)).isoformat()}")
+                    f1.write(f"{guesttoken}\t{(datetime.now()+timedelta(seconds=900)).isoformat()}")
+            else:
+                print("couldnt find guest token")
         return None
     async def _get_api_url(self):
         
