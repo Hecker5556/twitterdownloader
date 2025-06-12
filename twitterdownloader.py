@@ -84,6 +84,9 @@ class TwitterDownloader():
             if not a.get('data'):
                 if a['errors'][0]['message'] == "Bad guest token":
                     os.remove("guesttoken.txt")
+                    guestoken = await self._get_guest_token()
+                    self.cookies["gt"] = guestoken
+                    self.headers['x-guest-token'] = guestoken
                 new_features = a['errors'][0]['message'].split(': ')[1].split(', ')
                 for ft in new_features:
                     if self.debug:
@@ -299,7 +302,6 @@ class TwitterDownloader():
             'authorization': self.bearer,
             'content-type': 'application/json',
             'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'x-client-transaction-id': 'vNp7SpUdb/FGDO01i/rsWlo/CJ08dDa46XZM2iFhy4YgnD9T/Tef3+9BV+P57c1TEcViAb9jiVhofKwc0KFYfWieOg2Pvw',
             'x-csrf-token': self.csrf,
         }
         params = {
@@ -312,6 +314,27 @@ class TwitterDownloader():
             if self.debug:
                 with open("response.json", "w") as f1:
                     json.dump(result, f1, indent=4)
+        if not result.get('data'):
+            if "following features cannot be null" in result['errors'][0]['message']:
+                new_features = result['errors'][0]['message'].split(': ')[1].split(', ')
+                for ft in new_features:
+                    if self.debug:
+                        print(f"adding new feature {ft} to features")
+                    FEATURES[ft] = True
+                with open('features.json', 'w') as f1:
+                    json.dump(FEATURES, f1)
+                params = {
+                    'variables': json.dumps({"focalTweetId":self.tweet_id,"with_rux_injections":False,"rankingMode":"Relevance","includePromotedContent":True,"withCommunity":True,"withQuickPromoteEligibilityTweetFields":True,"withBirdwatchNotes":True,"withVoice":True}),
+                    'features': json.dumps(FEATURES),
+                    'fieldToggles': '{"withArticleRichContentState":true,"withArticlePlainText":false,"withGrokAnalyze":false,"withDisallowedReplyControls":false}',
+                }
+                async with self.session.get(self.tweetdetail, cookies=cookies, headers=headers, params=params, ) as r:
+                    result = await r.json()
+                    if self.debug:
+                        with open("response.json", "w") as f1:
+                            json.dump(result, f1, indent=4)
+            else:
+                raise Exception(f"Fetching data errored!: {result['errors'][0]['message']}")
         for i in result["data"]["threaded_conversation_with_injections_v2"]["instructions"][0]["entries"][::-1]:
             if "tweet" in i.get("entryId"):
                 entry = i
@@ -387,7 +410,10 @@ class TwitterDownloader():
         quoted = None
         if (quoted := tweet_results.get("quoted_status_result")) or tweet_results['legacy'].get("is_quote_status"):
             if not quoted:
-                info["quoted"] = await self.download(tweet_results['legacy'].get('quoted_status_permalink').get('expanded'), return_media_url=True)
+                try:
+                    info["quoted"] = await self.download(tweet_results['legacy'].get('quoted_status_permalink').get('expanded'), return_media_url=True)
+                except:
+                    info['quoted'] = {'link': tweet_results['legacy'].get('quoted_status_permalink').get('expanded')}
             else:
 
                 info["quoted"] = {}
@@ -448,13 +474,7 @@ class TwitterDownloader():
                 guesttoken = match.group(1)
                 with open("guesttoken.txt", "w") as f1:
                     f1.write(f"{guesttoken}\t{(datetime.now()+timedelta(seconds=900)).isoformat()}")
-            else:
-                async with self.session.get("https://x.com", headers=headers) as r:
-                    response = await r.text("utf8")
-                    if (match := re.search(pattern, response)):
-                        guesttoken = match.group(1)
-                        with open("guesttoken.txt", "w") as f1:
-                            f1.write(f"{guesttoken}\t{(datetime.now()+timedelta(seconds=900)).isoformat()}")
+                return guesttoken
         return None
     async def _get_api_url(self):
         
