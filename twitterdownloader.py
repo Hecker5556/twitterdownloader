@@ -198,13 +198,15 @@ class TwitterDownloader():
             aud = f"{self.result.get('author')['username']}-{int(datetime.now().timestamp())}.{ext}"
             await self._manifest_downloader(audio, aud, ext)
             temp_files.append(aud)
-            sub = await self._fetch_subs(subtitle)
-            temp_files.append(sub)
+            if subtitle:
+                sub = await self._fetch_subs(subtitle)
+                temp_files.append(sub)
             command = ["-i", vid, "-i", aud, ]
-            if caption:
-                command += ["-vf", f"subtitles={sub}"]
-            else:
-                command += ["-i", sub, "-c", "copy", "-c:s", "mov_text"]
+            if subtitle:
+                if caption:
+                    command += ["-vf", f"subtitles={sub}"]
+                else:
+                    command += ["-i", sub, "-c", "copy", "-c:s", "mov_text"]
             command += ["-y", filename + '.' + vid_ext]
             process = await asyncio.create_subprocess_exec("ffmpeg", *command)
             await process.wait()
