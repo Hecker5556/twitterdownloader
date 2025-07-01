@@ -241,7 +241,7 @@ class TwitterDownloader():
         
         subtitles_pattern = r"\#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"(.*?)\",NAME=\"(.*?)\",(?:.*?)URI=\"(.*?)\""
         audios_pattern = r"#EXT-X-MEDIA:NAME=\"Audio\",TYPE=AUDIO,GROUP-ID=\"(.*?)\",AUTOSELECT=YES,URI=\"(.*?)\""
-        videos_pattern = r"#EXT-X-STREAM-INF:AVERAGE-BANDWIDTH=(?:\d+?),BANDWIDTH=(\d+),RESOLUTION=(\d+)x(\d+),CODECS=\"(.*?)\",SUBTITLES=\"(.*?)\",AUDIO=\"(.*?)\"\n(.*?)\n"
+        videos_pattern = r"#EXT-X-STREAM-INF:AVERAGE-BANDWIDTH=(?:\d+),BANDWIDTH=(\d+),RESOLUTION=(\d+)x(\d+),CODECS=\"(.*?)\",(?:SUBTITLES=\"(.*?)\",)?AUDIO=\"(.*?)\"\n(.*?)\n"
         for i in media:
             mdia = {}
             if i['type'] == 'video' or i['type'] == 'animated_gif':
