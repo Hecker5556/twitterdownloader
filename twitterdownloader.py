@@ -201,12 +201,12 @@ class TwitterDownloader():
             if subtitle:
                 sub = await self._fetch_subs(subtitle)
                 temp_files.append(sub)
-            command = ["-i", vid, "-i", aud, ]
+            command = ["-i", vid, "-i", aud,  "-c", "copy", ]
             if subtitle:
                 if caption:
                     command += ["-vf", f"subtitles={sub}"]
                 else:
-                    command += ["-i", sub, "-c", "copy", "-c:s", "mov_text"]
+                    command += ["-i", sub, "-c:s", "mov_text"]
             command += ["-y", filename + '.' + vid_ext]
             process = await asyncio.create_subprocess_exec("ffmpeg", *command)
             await process.wait()
