@@ -87,6 +87,8 @@ class TwitterDownloader():
                     guestoken = await self._get_guest_token()
                     self.cookies["gt"] = guestoken
                     self.headers['x-guest-token'] = guestoken
+                if self.debug:
+                    print(a['errors'])
                 new_features = a['errors'][0]['message'].split(': ')[1].split(', ')
                 for ft in new_features:
                     if self.debug:
