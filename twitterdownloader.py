@@ -803,7 +803,6 @@ class Grok(TwitterDownloader):
                 'x-csrf-token': self.headers.get("x-csrf-token"),
                 'authorization': self.bearer,
                 'Referer': 'https://x.com/i/grok',
-                'x-client-transaction-id': 'gUKiIbzVFKlQFRVuFixSiyAy801YTuw2mNPAWL1cdDwM6Gz2EyXkE1Nio7a/oeZbHdg7GYKl0oTf9quztoIZg8kHmxKMgg',
                 'sec-ch-ua': '"Brave";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
                 'x-twitter-client-language': 'en',
                 'sec-ch-ua-mobile': '?0',
@@ -833,12 +832,11 @@ class Grok(TwitterDownloader):
             thinking = ""
             images = []
             while True:
-                chunk = await r.content.read(1)
-                if not chunk:
+                line = await r.content.readline()
+                if not line:
                     break
-                temp += chunk
                 try:
-                    a = json.loads(temp)
+                    a = json.loads(line)
                     if self.debug:
                         print(a)
                     if a.get("result") and a['result'].get("message"):
