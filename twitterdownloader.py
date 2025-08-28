@@ -639,7 +639,7 @@ class Grok(TwitterDownloader):
         else:
             self.queryId = None
         if not hasattr(self, "session") or self.session.closed:
-            self.session = aiohttp.ClientSession(connector=self._give_connector(self.proxy), max_field_size=MAX_FIELD_SIZE, max_line_size=1024*1024)
+            self.session = aiohttp.ClientSession(connector=self._give_connector(self.proxy), max_field_size=MAX_FIELD_SIZE)
         await self._get_bearer_token()
         from env import guest_id, auth_token, csrf
         self.cookies = {
@@ -830,6 +830,7 @@ class Grok(TwitterDownloader):
             start, end = None, None
             thinking = ""
             images = []
+            r.content._high_water = 1024*1024
             while True:
                 line = await r.content.readline()
                 if not line:
@@ -920,4 +921,4 @@ async def chatting():
                 print("Grok thought: ")
                 print(response.get("thinking"))
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(chatting())
