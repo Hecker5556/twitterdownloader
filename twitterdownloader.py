@@ -51,9 +51,9 @@ class TwitterDownloader():
                 'x-twitter-client-language': 'en',
             }
         params = {
-            'variables': json.dumps({"tweetId":self.tweet_id,"withCommunity":False,"includePromotedContent":False,"withVoice":False}),
+            'variables': json.dumps({"tweetId":self.tweet_id,"includePromotedContent":True,"withBirdwatchNotes":True,"withVoice":True,"withCommunity":True}),
             'features': json.dumps(FEATURES),
-            'fieldToggles': '{"withArticleRichContentState":true,"withArticlePlainText":false,"withGrokAnalyze":false,"withDisallowedReplyControls":false}',        
+            'fieldToggles': '{"withArticleRichContentState":true,"withArticlePlainText":false}',        
         }
         async with aiohttp.ClientSession(connector=self._give_connector(self.proxy), max_field_size=MAX_FIELD_SIZE) as session:
             if not hasattr(self, "session") or self.session.closed:
@@ -105,7 +105,7 @@ class TwitterDownloader():
                     if self.debug:
                         with open("response.json", "w") as f1:
                             json.dump(a, f1) 
-            if not a['data']['tweetResult'].get("result") or (a["data"]["tweetResult"]["result"].get("__typename") and a["data"]["tweetResult"]["result"].get("__typename") == "TweetUnavailable"):
+            if not a['data']['tweetResult'].get("result") or (a["data"]["tweetResult"]["result"].get("__typename") and a["data"]["tweetResult"]["result"].get("__typename") in ["TweetUnavailable", "TweetTombstone"]):
                 if not os.path.exists("env.py"):
                     raise Exception("no credentials detected, make an env.py file, put csrf token, guest_id, auth_token there")
                 from env import csrf, auth_token, guest_id
@@ -339,7 +339,7 @@ class TwitterDownloader():
                             json.dump(result, f1, indent=4)
             else:
                 raise Exception(f"Fetching data errored!: {result['errors'][0]['message']}")
-        for i in result["data"]["threaded_conversation_with_injections_v2"]["instructions"][0]["entries"][::-1]:
+        for i in eval(f'result{self._path_parser(self._find_key(result, "entries"))}')[::-1]:
             if "tweet" in i.get("entryId"):
                 entry = i
                 break
