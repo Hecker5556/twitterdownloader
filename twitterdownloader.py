@@ -599,29 +599,29 @@ class Grok(TwitterDownloader):
         self.model = model
         self.img_gen_count = img_gen_count
         super().__init__(*args)
-    async def __aenter__(self):
-        self.data = {
-            "responses": [
+    data=   {
+            "responses":[
             ],
-            "systemPromptName": "",
-            "grokModelOptionId": self.model,
-            "conversationId": None,
-            "returnSearchResults": True,
-            "returnCitations": True,
-            "promptMetadata": {
-                "promptSource": "NATURAL",
-                "action": "INPUT"
+            "systemPromptName":"",
+            "grokModelOptionId":"grok-4-auto",
+            "modelMode":"MODEL_MODE_AUTO",
+            "conversationId":None,
+            "returnSearchResults":True,
+            "returnCitations":True,
+            "promptMetadata":{
+                "promptSource":"NATURAL",
+                "action":"INPUT"
             },
-            "imageGenerationCount": 4,
-            "requestFeatures": {
-                "eagerTweets": True,
-                "serverHistory": True
-            },
-            "enableSideBySide": True,
-            "toolOverrides": {},
-            "isDeepsearch": False,
-            "isReasoning": False
+            "imageGenerationCount":4,
+            "requestFeatures":{
+                "eagerTweets":True,
+                "serverHistory":True},
+                "enableSideBySide":True,
+                "toolOverrides":{},
+                "modelConfigOverride":{},
+                "isTemporaryChat":False
             }
+    async def __aenter__(self):
         self.started = False
         return self
     async def __aexit__(self, a, b, c):
@@ -827,6 +827,7 @@ class Grok(TwitterDownloader):
             result = ""
             # json_results = []
             cited = None
+            web_results = []
             start, end = None, None
             thinking = ""
             images = []
@@ -850,6 +851,8 @@ class Grok(TwitterDownloader):
                         images.append(a['result']['imageAttachment'])
                     if a.get("result") and a['result'].get("citedWebResults"):
                         cited = a['result']["citedWebResults"]
+                    if a.get("result") and a['result'].get("webResults"):
+                        web_results += a['result'].get("webResults")
                     # json_results.append(a)
                     temp = bytearray()
                 except:
@@ -879,6 +882,7 @@ class Grok(TwitterDownloader):
                         })
             finished["citedWebResults"] = cited
             finished["message"] = result
+            finished["webResults"] = web_results
             return finished
 async def main():
     import argparse
@@ -897,7 +901,7 @@ async def main():
 async def chatting():
     """example function to chat with grok in console"""
     a = '\n'
-    async with Grok(model='grok-3') as grok:
+    async with Grok() as grok:
         await grok.start_chat()
         print("conversation id:", grok.conversation_id,)
         deepsearch = False
@@ -909,6 +913,10 @@ async def chatting():
                 continue
             if you == "reasoning":
                 reasoning = True
+                continue
+            if you == "id":
+                grok.conversation_id = str(input("conversation id: "))
+                grok.data = Grok.data
                 continue
             response = await grok.add_response(you, deep_search=deepsearch, reasoning=reasoning)
             deepsearch = False
