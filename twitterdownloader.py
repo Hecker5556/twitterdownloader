@@ -82,20 +82,24 @@ class TwitterDownloader():
                     with open("response.json", "w") as f1:
                         json.dump(a, f1)
             if not a.get('data'):
-                if a['errors'][0]['message'] == "Bad guest token":
+                if self.debug:
+                    print(a['errors'])
+                if "guest" in a['errors'][0]['message']:
                     os.remove("guesttoken.txt")
                     guestoken = await self._get_guest_token()
                     self.cookies["gt"] = guestoken
                     self.headers['x-guest-token'] = guestoken
-                if self.debug:
-                    print(a['errors'])
-                new_features = a['errors'][0]['message'].split(': ')[1].split(', ')
-                for ft in new_features:
-                    if self.debug:
-                        print(f"adding new feature {ft} to features")
-                    FEATURES[ft] = True
-                with open('features.json', 'w') as f1:
-                    json.dump(FEATURES, f1)
+                elif "token" in a['errors'][0]['message']:
+                    os.remove("bearer_token.txt")
+                    await self._get_bearer_token()
+                else:
+                    new_features = a['errors'][0]['message'].split(': ')[1].split(', ')
+                    for ft in new_features:
+                        if self.debug:
+                            print(f"adding new feature {ft} to features")
+                        FEATURES[ft] = True
+                    with open('features.json', 'w') as f1:
+                        json.dump(FEATURES, f1)
                 params = {
                     'variables': json.dumps({"tweetId":self.tweet_id,"withCommunity":False,"includePromotedContent":False,"withVoice":False}),
                     'features': json.dumps(FEATURES)
@@ -547,19 +551,25 @@ class TwitterDownloader():
                         raise Exception("couldnt get bearer token javascript")
                 self.jslink = matches.group(1)
                 async with self.session.get(self.jslink, ) as r:
-                    pattern = r'const e=\"(.*?)\";if\(!e\)throw new Error\(\"Bearer token'
+                    buf = b""
+                    pattern = r'return\"(Bearer .*?)\"'
+                    matches = None
                     while True:
                         chunk = await r.content.read(1024*10)
+                        buf += chunk
                         if not chunk:
                             break
-                        matches = re.search(pattern, chunk.decode("utf-8"))
+                        matches = await asyncio.to_thread(re.search, pattern, buf.decode("utf-8"))
                         if matches:
                             break
+                
                 if not matches:
-                    raise Exception(f"Couldn't find bearer token.")
+                    matches = await asyncio.to_thread(re.search, pattern, buf.decode("utf-8"))
+                    if not matches:
+                        raise Exception(f"Couldn't find bearer token.")
                 with open("bearer_token.txt", "w") as f1:
-                    f1.write("Bearer " + matches.group(1))
-                self.bearer = "Bearer " + matches.group(1)
+                    f1.write(matches.group(1))
+                self.bearer = matches.group(1)
                 return matches
     async def _post_data(self):
         
@@ -929,4 +939,4 @@ async def chatting():
                 print("Grok thought: ")
                 print(response.get("thinking"))
 if __name__ == "__main__":
-    asyncio.run(chatting())
+    asyncio.run(main())
