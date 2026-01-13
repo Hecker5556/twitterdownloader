@@ -13,6 +13,11 @@ if not os.path.exists('features.json'):
         f1.write("""{"responsive_web_graphql_exclude_directive_enabled":true,"verified_phone_label_enabled":false,"creator_subscriptions_tweet_preview_api_enabled":true,"responsive_web_graphql_timeline_navigation_enabled":true,"responsive_web_graphql_skip_user_profile_image_extensions_enabled":false,"c9s_tweet_anatomy_moderator_badge_enabled":true,"tweetypie_unmention_optimization_enabled":true,"responsive_web_edit_tweet_api_enabled":true,"graphql_is_translatable_rweb_tweet_is_translatable_enabled":true,"view_counts_everywhere_api_enabled":true,"longform_notetweets_consumption_enabled":true,"responsive_web_twitter_article_tweet_consumption_enabled":false,"tweet_awards_web_tipping_enabled":false,"freedom_of_speech_not_reach_fetch_enabled":true,"standardized_nudges_misinfo":true,"tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled":true,"rweb_video_timestamps_enabled":false,"longform_notetweets_rich_text_read_enabled":true,"longform_notetweets_inline_media_enabled":true,"responsive_web_media_download_video_enabled":false,"responsive_web_enhance_cards_enabled":false,"communities_web_enable_tweet_community_results_fetch":true,"tweet_with_visibility_results_prefer_gql_media_interstitial_enabled":true,"rweb_tipjar_consumption_enabled":true, "creator_subscriptions_quote_tweet_preview_enabled":true, "rweb_tipjar_consumption_enabled": true, "creator_subscriptions_quote_tweet_preview_enabled": true}""")
 with open("features.json", "r") as f1:
     FEATURES = json.load(f1)
+if not os.path.exists("features_birdwatch.json"):
+    with open("features_birdwatch.json", "w") as f1:
+        f1.write("""{"responsive_web_birdwatch_media_notes_enabled":true,"responsive_web_birdwatch_url_notes_enabled":false,"responsive_web_grok_community_note_translation_is_enabled":false,"responsive_web_birdwatch_fast_notes_badge_enabled":false,"responsive_web_birdwatch_live_note_enabled":false,"responsive_web_birdwatch_note_internal_insights_enabled":false,"responsive_web_grok_community_note_auto_translation_is_enabled":false,"responsive_web_graphql_timeline_navigation_enabled":true,"profile_label_improvements_pcf_label_in_post_enabled":true,"responsive_web_profile_redirect_enabled":false,"rweb_tipjar_consumption_enabled":true,"verified_phone_label_enabled":false,"responsive_web_graphql_skip_user_profile_image_extensions_enabled":false}""")
+with open("features_birdwatch.json", "r") as f1:
+    FEATURES_BIRDWATCH = json.load(f1)
 class TwitterDownloader():
     def _give_connector(self, proxy: str):
         return aiohttp.TCPConnector() if not proxy else ProxyConnector.from_url(proxy)
@@ -59,13 +64,16 @@ class TwitterDownloader():
             if not hasattr(self, "session") or self.session.closed:
                 self.session = session
             await self._get_bearer_token()
-            if (not hasattr(self, "restid") or not isinstance(self.restid, str)) or (not hasattr(self, "tweetdetail") or not isinstance(self.tweetdetail, str)):
+            if (not hasattr(self, "restid") or not isinstance(self.restid, str)) or (not hasattr(self, "tweetdetail") or not isinstance(self.tweetdetail, str) or (not hasattr(self, "fetchnote") or not isinstance(self.fetchnote, str))):
                 if not os.path.exists("apiurls.json"):
-                    self.restid, self.tweetdetail = await self._get_api_url()
+                    self.restid, self.tweetdetail, self.fetchnote = await self._get_api_url()
                 else:
                     with open("apiurls.json", "r") as f1:
                         thejson = json.load(f1)
-                        self.restid, self.tweetdetail = thejson["restid"], thejson["tweetdetail"]
+                        try:
+                            self.restid, self.tweetdetail, self.fetchnote = thejson["restid"], thejson["tweetdetail"], thejson['fetchnote']
+                        except KeyError:
+                            self.restid, self.tweetdetail, self.fetchnote = await self._get_api_url()
             self.headers['authorization'] = self.bearer
             guestoken = await self._get_guest_token()
             if not hasattr(self, "cookies"):
@@ -449,6 +457,55 @@ class TwitterDownloader():
         info["replies"] = tweet_results['legacy'].get("reply_count", 0)
         info["retweets"] = tweet_results['legacy'].get("retweet_count", 0)
         info["views"] = tweet_results['views'].get('count', 0)
+        if tweet_results.get("has_birdwatch_notes"):
+            note_url = tweet_results['birdwatch_pivot']['destinationUrl']
+            if os.path.exists("env.py"):
+                from env import csrf, auth_token, guest_id
+                self.csrf = csrf
+                self.auth_token = auth_token
+                self.guest_id = guest_id
+                if not hasattr(self, "fetchnote"):
+                    os.remove("apiurls.json")
+                    self.restid, self.tweetdetail, self.fetchnote = await self._get_api_url()
+                params = {
+                    'variables': json.dumps({"note_id": note_url.split("/n/")[1]}),
+                    'features': json.dumps(FEATURES_BIRDWATCH),
+                }
+                cookies = {
+                    'guest_id': self.guest_id,
+                    'auth_token': self.auth_token,
+                    'ct0': self.csrf,
+                }
+                headers = {
+                    'accept': '*/*',
+                    'accept-language': 'en-US,en;q=0.7',
+                    'authorization': self.bearer,
+                    'content-type': 'application/json',
+                    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'x-csrf-token': self.csrf,
+                }
+                async with self.session.get(self.fetchnote, headers=headers, cookies=cookies, params=params) as r:
+                    result = await r.json()
+                if not result.get('data'):
+                    if "following features cannot be null" in result['errors'][0]['message']:
+                        new_features = result['errors'][0]['message'].split(': ')[1].split(', ')
+                        for ft in new_features:
+                            if self.debug:
+                                print(f"adding new feature {ft} to features")
+                            FEATURES_BIRDWATCH[ft] = True
+                        with open('features_birdwatch.json', 'w') as f1:
+                            json.dump(FEATURES_BIRDWATCH, f1)
+                        params = {
+                            'variables': json.dumps({"note_id": note_url.split("/n/")[1]}),
+                            'features': json.dumps(FEATURES_BIRDWATCH),
+                        }
+
+                        async with self.session.get(self.fetchnote, headers=self.headers, cookies=self.cookies, params=params) as r:
+                            result = await r.json()
+                birdwatch = result['data']['birdwatch_note_by_rest_id']['data_v1']
+                info['added_context'] = {'url': note_url, 'text': birdwatch['summary']['text'], 'classification': birdwatch['classification'], 'trustworthy_sources': birdwatch['trustworthy_sources'], 'authenticated_fetch': True}
+            else:
+                info['added_context'] = {'url': note_url, 'text': tweet_results['birdwatch_pivot']['subtitle']['text'], 'authenticated_fetch': False}
         if tweet_results['legacy'].get("possibly_sensitive"):
             info["nsfw"] = True
         return info
@@ -514,10 +571,27 @@ class TwitterDownloader():
         tweetdetail = re.search(pattern3, location2).group(1)
         restid = f'https://api.x.com/graphql/{restid}/TweetResultByRestId'
         tweetdetail = f'https://x.com/i/api/graphql/{tweetdetail}/TweetDetail'
-        thejson = {"restid": restid, "tweetdetail": tweetdetail}
+        js_pattern = r"\"(shared~bundle\.(?:Grok~bundle\.)?ReaderMode~bundle\.Birdwatch~bundle\.TwitterArticles~bundle\.Compose~bundle\.Settings~b(?:.*?))\": ?\"(.*?)\""
+        js_match = re.findall(js_pattern, text)
+        base_url = "https://abs.twimg.com/responsive-web/client-web/"
+        fetchnote = None
+        fetchnote_pattern = r":\"(.*?)\",operationName:\"BirdwatchFetchOneNote\",.*?}}"
+        for part_1, part_2 in js_match:
+            async with self.session.get(base_url + part_1 + '.' + part_2 + "a" + ".js", ) as r:
+                js_text = await r.text("utf-8")
+            
+            js_text = js_text.split("queryId")
+            for i in js_text:
+                if fetchnote:=re.search(fetchnote_pattern, i):
+                    fetchnote = fetchnote.group(1)
+                    break
+            if fetchnote:
+                break
+        fetchnote_url = f"https://x.com/i/api/graphql/{fetchnote}/BirdwatchFetchOneNote"
+        thejson = {"restid": restid, "tweetdetail": tweetdetail, "fetchnote": fetchnote_url}
         with open("apiurls.json", "w") as f1:
             json.dump(thejson, f1)
-        return restid, tweetdetail
+        return restid, tweetdetail, fetchnote_url
     async def _get_bearer_token(self):
         if not hasattr(self, "bearer") or not isinstance(self.bearer, str):
             if os.path.exists("bearer_token.txt"):
