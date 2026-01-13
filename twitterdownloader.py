@@ -503,9 +503,11 @@ class TwitterDownloader():
                         async with self.session.get(self.fetchnote, headers=self.headers, cookies=self.cookies, params=params) as r:
                             result = await r.json()
                 birdwatch = result['data']['birdwatch_note_by_rest_id']['data_v1']
+                birdwatch2 = result['data']['birdwatch_note_by_rest_id']
                 info['added_context'] = {'url': note_url, 'text': birdwatch['summary']['text'], 
                                          'classification': birdwatch['classification'], 'trustworthy_sources': birdwatch['trustworthy_sources'], 
-                                         'rating_status': birdwatch['rating_status'], 'created_at': datetime.fromtimestamp(birdwatch['created_at']).isoformat(),
+                                         'rating_status': birdwatch2['rating_status'], 'created_at': datetime.fromtimestamp(int(birdwatch2['created_at'])/1000).isoformat(),
+                                         'context_author': {'alias': birdwatch2['birdwatch_profile']['alias'], 'successful_ratings_helpful_pct': round(birdwatch2['birdwatch_profile']['ratings_count']['successful']['helpful_count'] / birdwatch2['birdwatch_profile']['ratings_count']['successful']['total'], 2)},
                                          'authenticated_fetch': True}
             else:
                 info['added_context'] = {'url': note_url, 'text': tweet_results['birdwatch_pivot']['subtitle']['text'], 'authenticated_fetch': False}
