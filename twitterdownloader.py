@@ -684,32 +684,32 @@ class TwitterDownloader():
                 async with self.session.get(refresh, headers=headers, ) as r:
                     pass
 class Grok(TwitterDownloader):
-    def __init__(self, model: Literal['grok-3', 'grok-2'] = 'grok-2', img_gen_count: int = 4, *args):
+    def __init__(self, model: str = None, img_gen_count: int = 4, *args):
         self.model = model
         self.img_gen_count = img_gen_count
         super().__init__(*args)
-    data=   {
-            "responses":[
-            ],
-            "systemPromptName":"",
-            "grokModelOptionId":"grok-4-auto",
-            "modelMode":"MODEL_MODE_AUTO",
-            "conversationId":None,
-            "returnSearchResults":True,
-            "returnCitations":True,
-            "promptMetadata":{
-                "promptSource":"NATURAL",
-                "action":"INPUT"
-            },
-            "imageGenerationCount":4,
-            "requestFeatures":{
-                "eagerTweets":True,
-                "serverHistory":True},
-                "enableSideBySide":True,
-                "toolOverrides":{},
-                "modelConfigOverride":{},
-                "isTemporaryChat":False
-            }
+        self.data=   {
+                "responses":[
+                ],
+                "systemPromptName":"",
+                "grokModelOptionId":"grok-4-auto",
+                "modelMode":"MODEL_MODE_AUTO",
+                "conversationId":None,
+                "returnSearchResults":True,
+                "returnCitations":True,
+                "promptMetadata":{
+                    "promptSource":"NATURAL",
+                    "action":"INPUT"
+                },
+                "imageGenerationCount":4,
+                "requestFeatures":{
+                    "eagerTweets":True,
+                    "serverHistory":True},
+                    "enableSideBySide":True,
+                    "toolOverrides":{},
+                    "modelConfigOverride":{},
+                    "isTemporaryChat":False
+                }
     async def __aenter__(self):
         self.started = False
         return self
