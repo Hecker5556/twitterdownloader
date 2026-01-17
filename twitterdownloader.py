@@ -457,7 +457,7 @@ class TwitterDownloader():
         info["replies"] = tweet_results['legacy'].get("reply_count", 0)
         info["retweets"] = tweet_results['legacy'].get("retweet_count", 0)
         info["views"] = tweet_results['views'].get('count', 0)
-        if tweet_results.get("has_birdwatch_notes"):
+        if tweet_results.get("birdwatch_pivot"):
             note_url = tweet_results['birdwatch_pivot']['destinationUrl']
             if os.path.exists("env.py"):
                 from env import csrf, auth_token, guest_id
@@ -684,11 +684,9 @@ class TwitterDownloader():
                 async with self.session.get(refresh, headers=headers, ) as r:
                     pass
 class Grok(TwitterDownloader):
-    def __init__(self, model: str = None, img_gen_count: int = 4, *args):
-        self.model = model
-        self.img_gen_count = img_gen_count
-        super().__init__(*args)
-        self.data=   {
+    @staticmethod
+    def example_data():
+        return {
                 "responses":[
                 ],
                 "systemPromptName":"",
@@ -710,6 +708,11 @@ class Grok(TwitterDownloader):
                     "modelConfigOverride":{},
                     "isTemporaryChat":False
                 }
+    def __init__(self, model: str = None, img_gen_count: int = 4, *args):
+        self.model = model
+        self.img_gen_count = img_gen_count
+        super().__init__(*args)
+        self.data = self.example_data()
     async def __aenter__(self):
         self.started = False
         return self
