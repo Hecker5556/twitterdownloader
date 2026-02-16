@@ -631,7 +631,7 @@ class TwitterDownloader():
                 self.jslink = matches.group(1)
                 async with self.session.get(self.jslink, ) as r:
                     buf = b""
-                    pattern = r'return\"(Bearer .*?)\"'
+                    pattern = r'\"(Bearer .*?)\"'
                     matches = None
                     while True:
                         chunk = await r.content.read(1024*10)
