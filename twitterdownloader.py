@@ -761,21 +761,22 @@ class Grok(TwitterDownloader):
             }
             async with self.session.get("https://x.com/i/grok", headers=headers, cookies=self.cookies) as r:
                 rtext = await r.text("utf-8")
-            js_pattern = r"\"(shared~bundle\.(?:Grok~bundle\.)?ReaderMode~bundle\.Birdwatch~bundle\.TwitterArticles~bundle\.Compose~bundle\.Settings~b(?:.*?))\": ?\"(.*?)\""
-            js_match = re.findall(js_pattern, rtext)
+            js_pattern = r"(shared~bundle\.GrokDrawer~bundle\.ReaderMode~bundle\.Birdwatch~bundle\.TwitterArticles~bundle\.Compose~bundle\.Sett)\":\"(.*?)\""
+            js_match = re.search(js_pattern, rtext)
             base_url = "https://abs.twimg.com/responsive-web/client-web/"
             queryId = None
-            for part_1, part_2 in js_match:
-                async with self.session.get(base_url + part_1 + '.' + part_2 + "a" + ".js", ) as r:
-                    js_text = await r.text("utf-8")
+            if not js_match:
+                raise Exception(f"Couldnt fetch queryid for grok api")
+            part_1 = js_match.group(1)
+            part_2 = js_match.group(2)
+            async with self.session.get(base_url + part_1 + '.' + part_2 + "a" + ".js" ) as r:
+                js_text = await r.text("utf-8")
                 queryId_pattern = r":\"(.*?)\",operationName:\"CreateGrokConversation\",.*?}}"
                 js_text = js_text.split("queryId")
                 for i in js_text:
                     if queryId:=re.search(queryId_pattern, i):
                         queryId = queryId.group(1)
                         break
-                if queryId:
-                    break
             self.queryId = queryId
             with open("queryIdcache.txt", "w") as f1:
                 expiry = (datetime.now() + timedelta(days=7)).isoformat()
