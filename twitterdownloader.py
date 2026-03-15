@@ -576,21 +576,19 @@ class TwitterDownloader():
         tweetdetail = re.search(pattern3, location2).group(1)
         restid = f'https://api.x.com/graphql/{restid}/TweetResultByRestId'
         tweetdetail = f'https://x.com/i/api/graphql/{tweetdetail}/TweetDetail'
-        js_pattern = r"\"(shared~bundle\.(?:Grok~bundle\.)?ReaderMode~bundle\.Birdwatch~bundle\.TwitterArticles~bundle\.Compose~bundle\.Settings~b(?:.*?))\": ?\"(.*?)\""
-        js_match = re.findall(js_pattern, text)
+        js_fetchnote = r"(shared~bundle\.GrokDrawer~bundle\.ReaderMode~bundle\.Birdwatch~bundle\.TwitterArticles~bundle\.Compose~bundle\.Sett)\":\"(.*?)\""
+        js_fetchnote_match = re.search(js_fetchnote, text)
         base_url = "https://abs.twimg.com/responsive-web/client-web/"
+
         fetchnote = None
         fetchnote_pattern = r":\"(.*?)\",operationName:\"BirdwatchFetchOneNote\",.*?}}"
-        for part_1, part_2 in js_match:
-            async with self.session.get(base_url + part_1 + '.' + part_2 + "a" + ".js", ) as r:
-                js_text = await r.text("utf-8")
-            
-            js_text = js_text.split("queryId")
-            for i in js_text:
-                if fetchnote:=re.search(fetchnote_pattern, i):
-                    fetchnote = fetchnote.group(1)
-                    break
-            if fetchnote:
+        async with self.session.get(base_url + js_fetchnote_match.group(1) + '.' + js_fetchnote_match.group(2) + "a" + ".js", ) as r:
+            js_text = await r.text("utf-8")
+        
+        js_text = js_text.split("queryId")
+        for i in js_text:
+            if fetchnote:=re.search(fetchnote_pattern, i):
+                fetchnote = fetchnote.group(1)
                 break
         fetchnote_url = f"https://x.com/i/api/graphql/{fetchnote}/BirdwatchFetchOneNote"
         thejson = {"restid": restid, "tweetdetail": tweetdetail, "fetchnote": fetchnote_url}
