@@ -683,12 +683,12 @@ class TwitterDownloader():
                     pass
 class Grok(TwitterDownloader):
     @staticmethod
-    def example_data():
+    def example_data(model: str = "grok-4-auto", imagegencount: int = 4):
         return {
                 "responses":[
                 ],
                 "systemPromptName":"",
-                "grokModelOptionId":"grok-4-auto",
+                "grokModelOptionId":model,
                 "modelMode":"MODEL_MODE_AUTO",
                 "conversationId":None,
                 "returnSearchResults":True,
@@ -697,7 +697,7 @@ class Grok(TwitterDownloader):
                     "promptSource":"NATURAL",
                     "action":"INPUT"
                 },
-                "imageGenerationCount":4,
+                "imageGenerationCount":imagegencount,
                 "requestFeatures":{
                     "eagerTweets":True,
                     "serverHistory":True},
@@ -866,13 +866,6 @@ class Grok(TwitterDownloader):
                     raise FileNotFoundError(f"Couldn't find {file}")
                 else:
                     async with self.session.get(file) as r:
-                        accepted = ["image", "pdf", "json"]
-                        proper = False
-                        for i in accepted:
-                            if i in r.headers.get("content-type").lower():
-                                proper = True
-                        if not proper: 
-                            raise ValueError(f"File must be an image/pdf/json")
                         ext = mimetypes.guess_extension(r.headers.get("content-type"))
                         file = f"grok_file-{int(datetime.now().timestamp())}{ext}"
                         with open(file, "wb") as f1:
@@ -881,14 +874,6 @@ class Grok(TwitterDownloader):
                                 if not chunk:
                                     break
                                 f1.write(chunk)
-            else:
-                accepted = ["image", "pdf", "json"]
-                proper = False
-                for i in accepted:
-                    if i in mimetypes.guess_type(file)[0].lower():
-                        proper = True
-                if not proper:
-                    raise ValueError(f"File must be an image/pdf/json")
             data = aiohttp.FormData()
             data.add_field("image", open(file, 'rb'), content_type=mimetypes.guess_type(file)[0])
             _headers = {
@@ -930,7 +915,7 @@ class Grok(TwitterDownloader):
                 if not line:
                     break
                 try:
-                    a = json.loads(line)
+                    a = await asyncio.to_thread(json.loads, line)
                     if self.debug:
                         print(a)
                     if a.get("result") and a['result'].get("message"):
@@ -940,8 +925,10 @@ class Grok(TwitterDownloader):
                             thinking += a['result']['message']
                             if not start:
                                 start = datetime.now()
-                    elif a.get("result") and a['result'].get("imageAttachment"):
-                        images.append(a['result']['imageAttachment'])
+                    if a.get('result') and a['result']['mediaGenType'] == 'image_gen':
+                        cardattachment = await asyncio.to_thread(json.loads, a['result']['cardAttachment'])
+                        if cardattachment['imageAttachment']['progress'] == 100:
+                            images.append(cardattachment['imageAttachment'])
                     if a.get("result") and a['result'].get("citedWebResults"):
                         cited = a['result']["citedWebResults"]
                     if a.get("result") and a['result'].get("webResults"):
@@ -961,13 +948,14 @@ class Grok(TwitterDownloader):
             #     elif i.get('result') and i['result'].get("imageAttachment"):
             #         images.append(i['result']['imageAttachment'])
             for img in images:
-                async with self.session.get(img['imageUrl'], cookies=self.cookies, headers=headers) as r:
-                    with open(img['fileName'], 'wb') as f1:
-                        while True:
-                            chunk = await r.content.read(1024)
-                            if not chunk:
-                                break
-                            f1.write(chunk)
+                if not os.path.exists(img['fileName']):
+                    async with self.session.get(img['imageUrl'], cookies=self.cookies, headers=headers) as r:
+                        with open(img['fileName'], 'wb') as f1:
+                            while True:
+                                chunk = await r.content.read(1024)
+                                if not chunk:
+                                    break
+                                f1.write(chunk)
             finished["images"] = images
             self.data["responses"].append({
                             "message":result,
