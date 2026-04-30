@@ -683,7 +683,7 @@ class TwitterDownloader():
                     pass
 class Grok(TwitterDownloader):
     @staticmethod
-    def example_data(model: str = "grok-4-auto", imagegencount: int = 4):
+    def example_data(model: str = "grok-3-latest", imagegencount: int = 4):
         return {
                 "responses":[
                 ],
@@ -710,7 +710,7 @@ class Grok(TwitterDownloader):
         self.model = model
         self.img_gen_count = img_gen_count
         super().__init__(*args)
-        self.data = self.example_data()
+        self.data = self.example_data(model, img_gen_count)
     async def __aenter__(self):
         self.started = False
         return self
@@ -724,6 +724,8 @@ class Grok(TwitterDownloader):
                 aaa = f1.read().split("\t")
                 if datetime.fromisoformat(aaa[1]) > datetime.now():
                     self.queryId = aaa[0]
+                    if self.queryId == "None":
+                        self.queryId = None
                 else:
                     self.queryId = None
         else:
@@ -759,7 +761,7 @@ class Grok(TwitterDownloader):
             }
             async with self.session.get("https://x.com/i/grok", headers=headers, cookies=self.cookies) as r:
                 rtext = await r.text("utf-8")
-            js_pattern = r"(\d+):\"(shared~bundle\.GrokDrawer~bundle\.ReaderMode~bundle\.Birdwatch~bundle\.TwitterArticles~bundle\.Compose~bundle\.Sett)\""
+            js_pattern = r"(\d+):\"(shared~ondemand\.HoverCard~bundle\.GrokDrawer~ondemand\.XChat~bundle\.ReaderMode~bundle\.ComposeGrokMedia~ondemand)\""
             js_match = re.search(js_pattern, rtext)
             base_url = "https://abs.twimg.com/responsive-web/client-web/"
             queryId = None
@@ -777,6 +779,8 @@ class Grok(TwitterDownloader):
                     if queryId:=re.search(queryId_pattern, i):
                         queryId = queryId.group(1)
                         break
+            if not queryId:
+                raise Exception(f"Couldnt fetch queryid for grok api")
             self.queryId = queryId
             with open("queryIdcache.txt", "w") as f1:
                 expiry = (datetime.now() + timedelta(days=7)).isoformat()
@@ -902,6 +906,7 @@ class Grok(TwitterDownloader):
                 for key, value in r.request_info.headers.items():
                     temp_head[key] = value
                 print(temp_head)
+                print(r.status)
             result = ""
             # json_results = []
             cited = None
@@ -914,10 +919,10 @@ class Grok(TwitterDownloader):
                 line = await r.content.readline()
                 if not line:
                     break
+                if self.debug:
+                    print(line)
                 try:
                     a = await asyncio.to_thread(json.loads, line)
-                    if self.debug:
-                        print(a)
                     if a.get("result") and a['result'].get("message"):
                         if not a['result'].get('isThinking') and a['result'].get("messageStepId", "final") == "final":
                             result += a['result']['message']
@@ -933,9 +938,10 @@ class Grok(TwitterDownloader):
                         cited = a['result']["citedWebResults"]
                     if a.get("result") and a['result'].get("webResults"):
                         web_results += a['result'].get("webResults")
-                    # json_results.append(a)
-                    temp = bytearray()
-                except:
+                except Exception as e:
+                    if self.debug:
+                        print(e)
+                        print(line)
                     continue
             
             if start:
