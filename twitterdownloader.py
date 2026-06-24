@@ -887,6 +887,7 @@ class Grok(TwitterDownloader):
         'ct0': csrf,
         'lang': 'en',
         }
+        self.csrf = csrf
     async def __aenter__(self):
         self.started = False
         return self
