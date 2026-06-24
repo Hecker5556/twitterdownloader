@@ -63,9 +63,9 @@ class TwitterDownloader():
                         mediaInfo['variants'].append(video_variant)
                 elif mediaInfo['type'] == 'photo':
                     mediaInfo['url'] = mediaEntry.get("media_url_https")
-                    original_info = records.get(mediaEntry.get("original_info").get("__ref"))
-                    mediaInfo['width'] = original_info.get("width")
-                    mediaInfo['height'] = original_info.get("height")
+                original_info = records.get(mediaEntry.get("original_info").get("__ref"))
+                mediaInfo['width'] = original_info.get("width")
+                mediaInfo['height'] = original_info.get("height")
                 result['medias'].append(mediaInfo)
         if mapEntry.get("quoted_tweet_results"):
             quoted_tweet = records.get(records.get(mapEntry.get("quoted_tweet_results").get("__ref")).get("result").get("__ref"))
@@ -407,7 +407,7 @@ class TwitterDownloader():
                     result['variants'] = {"direct": list(sorted(result['variants']['direct'], key=lambda x: x.get('size'), reverse=True)), "dash": list(sorted(result['variants']['dash'], key=lambda x: x.get('size'), reverse=True))}
                 else:
                     for j in media[i]['variants']:
-                        result['variants']["direct"].append({"bitrate": int(j['bitrate']), "url": j['url'], "height": i['sizes']['large']['h'], "width": i['sizes']['large']['w'], "size": None, "size_mb": None, "type": "direct"})
+                        result['variants']["direct"].append({"bitrate": int(j['bitrate']), "url": j['url'], "height": media[i]['height'], "width": media[i]['width'], "size": None, "size_mb": None, "type": "direct"})
                 media[i] = result
     async def _parse_media(self, media: dict):
         medias = []
