@@ -229,7 +229,10 @@ class TwitterDownloader():
                 if not result.get("medias"):
                     return result
                 await self._parse_seroval_videos(result['medias'])
-                
+                if result.get("quoted") is not None and len(result.get("quoted").get("medias")) > 0:
+                    await self._parse_seroval_videos(result['quoted']['medias'])
+                if result.get("replying_to") is not None:
+                    result['replying_to'] = await self.download(result['replying_to']['link'], max_size, return_media_url, video_format, caption_videos, authenticated)
 
 
             self.result = result
