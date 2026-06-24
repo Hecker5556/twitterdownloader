@@ -970,7 +970,7 @@ class Grok(TwitterDownloader):
             'sec-fetch-site': 'same-origin',
             'sec-gpc': '1',
             'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-            'x-csrf-token': csrf,
+            'x-csrf-token': self.csrf,
         }
         data = {
             "queryId": self.queryId,
