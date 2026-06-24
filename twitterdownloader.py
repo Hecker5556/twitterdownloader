@@ -878,6 +878,15 @@ class Grok(TwitterDownloader):
             'x-twitter-active-user': 'yes',
             'x-twitter-client-language': 'en',
         }
+        from env import guest_id, auth_token, csrf
+        self.cookies = {
+        'dnt': '1',
+        'guest_id': guest_id,
+        'night_mode': '2',
+        'auth_token': auth_token,
+        'ct0': csrf,
+        'lang': 'en',
+        }
     async def __aenter__(self):
         self.started = False
         return self
@@ -900,15 +909,7 @@ class Grok(TwitterDownloader):
         if not hasattr(self, "session") or self.session.closed:
             self.session = aiohttp.ClientSession(connector=self._give_connector(self.proxy), max_field_size=MAX_FIELD_SIZE)
         await self._get_bearer_token()
-        from env import guest_id, auth_token, csrf
-        self.cookies = {
-        'dnt': '1',
-        'guest_id': guest_id,
-        'night_mode': '2',
-        'auth_token': auth_token,
-        'ct0': csrf,
-        'lang': 'en',
-        }
+
         if not self.queryId:
             headers = {
             'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
