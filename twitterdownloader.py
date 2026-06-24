@@ -9,15 +9,16 @@ import base64
 import traceback
 LINKPATTERNS = [r'https://(?:x)?(?:twitter)?\.com/(?:.*?)/status/(\d*?)/?$', r'https://(?:x)?(?:twitter)?\.com/(?:.*?)/status/(\d*?)/(?:.*?)/\d$']
 MAX_FIELD_SIZE = 11000
-if not os.path.exists('features.json'):
-    with open('features.json', 'w') as f1:
+base = os.path.dirname(os.path.abspath(__file__))
+if not os.path.exists(os.path.join(base, 'features.json')):
+    with open(os.path.join(base, 'features.json'), 'w') as f1:
         f1.write("""{"responsive_web_graphql_exclude_directive_enabled":true,"verified_phone_label_enabled":false,"creator_subscriptions_tweet_preview_api_enabled":true,"responsive_web_graphql_timeline_navigation_enabled":true,"responsive_web_graphql_skip_user_profile_image_extensions_enabled":false,"c9s_tweet_anatomy_moderator_badge_enabled":true,"tweetypie_unmention_optimization_enabled":true,"responsive_web_edit_tweet_api_enabled":true,"graphql_is_translatable_rweb_tweet_is_translatable_enabled":true,"view_counts_everywhere_api_enabled":true,"longform_notetweets_consumption_enabled":true,"responsive_web_twitter_article_tweet_consumption_enabled":false,"tweet_awards_web_tipping_enabled":false,"freedom_of_speech_not_reach_fetch_enabled":true,"standardized_nudges_misinfo":true,"tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled":true,"rweb_video_timestamps_enabled":false,"longform_notetweets_rich_text_read_enabled":true,"longform_notetweets_inline_media_enabled":true,"responsive_web_media_download_video_enabled":false,"responsive_web_enhance_cards_enabled":false,"communities_web_enable_tweet_community_results_fetch":true,"tweet_with_visibility_results_prefer_gql_media_interstitial_enabled":true,"rweb_tipjar_consumption_enabled":true, "creator_subscriptions_quote_tweet_preview_enabled":true, "rweb_tipjar_consumption_enabled": true, "creator_subscriptions_quote_tweet_preview_enabled": true}""")
-with open("features.json", "r") as f1:
+with open(os.path.join(base, "features.json"), "r") as f1:
     FEATURES = json.load(f1)
-if not os.path.exists("features_birdwatch.json"):
-    with open("features_birdwatch.json", "w") as f1:
+if not os.path.exists(os.path.join(base, "features_birdwatch.json")):
+    with open(os.path.join(base, "features_birdwatch.json"), "w") as f1:
         f1.write("""{"responsive_web_birdwatch_media_notes_enabled":true,"responsive_web_birdwatch_url_notes_enabled":false,"responsive_web_grok_community_note_translation_is_enabled":false,"responsive_web_birdwatch_fast_notes_badge_enabled":false,"responsive_web_birdwatch_live_note_enabled":false,"responsive_web_birdwatch_note_internal_insights_enabled":false,"responsive_web_grok_community_note_auto_translation_is_enabled":false,"responsive_web_graphql_timeline_navigation_enabled":true,"profile_label_improvements_pcf_label_in_post_enabled":true,"responsive_web_profile_redirect_enabled":false,"rweb_tipjar_consumption_enabled":true,"verified_phone_label_enabled":false,"responsive_web_graphql_skip_user_profile_image_extensions_enabled":false}""")
-with open("features_birdwatch.json", "r") as f1:
+with open(os.path.join(base, "features_birdwatch.json"), "r") as f1:
     FEATURES_BIRDWATCH = json.load(f1)
 class TwitterDownloader():
     def _give_connector(self, proxy: str):
@@ -153,10 +154,10 @@ class TwitterDownloader():
                 self.headers['x-csrf-token'] = self.csrf
                 await self._get_bearer_token()
                 if (not hasattr(self, "restid") or not isinstance(self.restid, str)) or (not hasattr(self, "tweetdetail") or not isinstance(self.tweetdetail, str) or (not hasattr(self, "fetchnote") or not isinstance(self.fetchnote, str))):
-                    if not os.path.exists("apiurls.json"):
+                    if not os.path.exists(os.path.join(base, "apiurls.json")):
                         self.restid, self.tweetdetail, self.fetchnote = await self._get_api_url()
                     else:
-                        with open("apiurls.json", "r") as f1:
+                        with open(os.path.join(base, "apiurls.json"), "r") as f1:
                             thejson = json.load(f1)
                             try:
                                 self.restid, self.tweetdetail, self.fetchnote = thejson["restid"], thejson["tweetdetail"], thejson['fetchnote']
@@ -175,18 +176,18 @@ class TwitterDownloader():
                 async with self.session.get(self.restid, cookies=self.cookies,params=params, headers=self.headers, ) as r:
                     a = await r.json()
                     if self.debug:
-                        with open("response.json", "w") as f1:
+                        with open(os.path.join(base, "response.json"), "w") as f1:
                             json.dump(a, f1)
                 if not a.get('data'):
                     if self.debug:
                         print(a['errors'])
                     if "guest" in a['errors'][0]['message']:
-                        os.remove("guesttoken.txt")
+                        os.remove(os.path.join(base, "guesttoken.txt"))
                         guestoken = await self._get_guest_token()
                         self.cookies["gt"] = guestoken
                         self.headers['x-guest-token'] = guestoken
                     elif "token" in a['errors'][0]['message']:
-                        os.remove("bearer_token.txt")
+                        os.remove(os.path.join(base, "bearer_token.txt"))
                         await self._get_bearer_token()
                     else:
                         new_features = a['errors'][0]['message'].split(': ')[1].split(', ')
@@ -194,7 +195,7 @@ class TwitterDownloader():
                             if self.debug:
                                 print(f"adding new feature {ft} to features")
                             FEATURES[ft] = True
-                        with open('features.json', 'w') as f1:
+                        with open(os.path.join(base, 'features.json'), 'w') as f1:
                             json.dump(FEATURES, f1)
                     params = {
                         'variables': json.dumps({"tweetId":self.tweet_id,"withCommunity":False,"includePromotedContent":False,"withVoice":False}),
@@ -203,7 +204,7 @@ class TwitterDownloader():
                     async with self.session.get(self.restid, cookies=self.cookies, headers=self.headers, params=params, ) as r:
                         a = await r.json()
                         if self.debug:
-                            with open("response.json", "w") as f1:
+                            with open(os.path.join(base, "response.json"), "w") as f1:
                                 json.dump(a, f1) 
                 if not a['data']['tweetResult'].get("result") or (a["data"]["tweetResult"]["result"].get("__typename") and a["data"]["tweetResult"]["result"].get("__typename") in ["TweetUnavailable", "TweetTombstone"]):
                     if not os.path.exists("env.py"):
@@ -223,7 +224,7 @@ class TwitterDownloader():
                     if not script:
                         raise Exception("Couldnt find post info anonymously, use credentials")
                 script = script.group(1)
-                process = await asyncio.subprocess.create_subprocess_exec("node", *["extractJson.js"], stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE)
+                process = await asyncio.subprocess.create_subprocess_exec("node", *[os.path.join(base, "extractJson.js")], stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE)
                 stdout, stderr = await process.communicate(script.encode())
                 if (process.returncode != 0):
                     raise Exception("Errored in extracting json from source")
@@ -484,7 +485,7 @@ class TwitterDownloader():
         async with self.session.get(self.tweetdetail, cookies=cookies, headers=headers, params=params, ) as r:
             result = await r.json()
             if self.debug:
-                with open("response.json", "w") as f1:
+                with open(os.path.join(base, "response.json"), "w") as f1:
                     json.dump(result, f1, indent=4)
         if not result.get('data'):
             if "following features cannot be null" in result['errors'][0]['message']:
@@ -493,7 +494,7 @@ class TwitterDownloader():
                     if self.debug:
                         print(f"adding new feature {ft} to features")
                     FEATURES[ft] = True
-                with open('features.json', 'w') as f1:
+                with open(os.path.join(base, 'features.json'), 'w') as f1:
                     json.dump(FEATURES, f1)
                 params = {
                     'variables': json.dumps({"focalTweetId":self.tweet_id,"with_rux_injections":False,"rankingMode":"Relevance","includePromotedContent":True,"withCommunity":True,"withQuickPromoteEligibilityTweetFields":True,"withBirdwatchNotes":True,"withVoice":True}),
@@ -503,7 +504,7 @@ class TwitterDownloader():
                 async with self.session.get(self.tweetdetail, cookies=cookies, headers=headers, params=params, ) as r:
                     result = await r.json()
                     if self.debug:
-                        with open("response.json", "w") as f1:
+                        with open(os.path.join(base, "response.json"), "w") as f1:
                             json.dump(result, f1, indent=4)
             else:
                 raise Exception(f"Fetching data errored!: {result['errors'][0]['message']}")
@@ -621,7 +622,7 @@ class TwitterDownloader():
                 self.auth_token = auth_token
                 self.guest_id = guest_id
                 if not hasattr(self, "fetchnote"):
-                    os.remove("apiurls.json")
+                    os.remove(os.path.join(base, "apiurls.json"))
                     self.restid, self.tweetdetail, self.fetchnote = await self._get_api_url()
                 params = {
                     'variables': json.dumps({"note_id": note_url.split("/n/")[1]}),
@@ -649,7 +650,7 @@ class TwitterDownloader():
                             if self.debug:
                                 print(f"adding new feature {ft} to features")
                             FEATURES_BIRDWATCH[ft] = True
-                        with open('features_birdwatch.json', 'w') as f1:
+                        with open(os.path.join(base, 'features_birdwatch.json'), 'w') as f1:
                             json.dump(FEATURES_BIRDWATCH, f1)
                         params = {
                             'variables': json.dumps({"note_id": note_url.split("/n/")[1]}),
@@ -671,8 +672,8 @@ class TwitterDownloader():
             info["nsfw"] = True
         return info
     async def _get_guest_token(self):
-        if os.path.exists("guesttoken.txt"):
-            with open("guesttoken.txt", "r") as f1:
+        if os.path.exists(os.path.join(base, "guesttoken.txt")):
+            with open(os.path.join(base, "guesttoken.txt"), "r") as f1:
                 a = f1.read().split("\t")
                 guesttoken = a[0]
                 expiry = a[1]
@@ -698,7 +699,7 @@ class TwitterDownloader():
             response = await r.text("utf8")
             if (match := re.search(pattern, response)):
                 guesttoken = match.group(1)
-                with open("guesttoken.txt", "w") as f1:
+                with open(os.path.join(base, "guesttoken.txt"), "w") as f1:
                     f1.write(f"{guesttoken}\t{(datetime.now()+timedelta(seconds=900)).isoformat()}")
                 return guesttoken
         return None
@@ -720,8 +721,8 @@ class TwitterDownloader():
                     text = await r.text('utf-8')
                     matches = re.search(pattern ,text)
                     if not matches:
-                        if os.path.exists("bearer_token.txt"):
-                            os.remove("bearer_token.txt")
+                        if os.path.exists(os.path.join(base, "bearer_token.txt")):
+                            os.remove(os.path.join(base, "bearer_token.txt"))
                             await self._post_data()
                             async with self.session.get(self.link, headers=self.headers, ) as r:
                                 text = await r.text('utf-8')
@@ -755,13 +756,13 @@ class TwitterDownloader():
                 break
         fetchnote_url = f"https://x.com/i/api/graphql/{fetchnote}/BirdwatchFetchOneNote"
         thejson = {"restid": restid, "tweetdetail": tweetdetail, "fetchnote": fetchnote_url}
-        with open("apiurls.json", "w") as f1:
+        with open(os.path.join(base, "apiurls.json"), "w") as f1:
             json.dump(thejson, f1)
         return restid, tweetdetail, fetchnote_url
     async def _get_bearer_token(self):
         if not hasattr(self, "bearer") or not isinstance(self.bearer, str):
-            if os.path.exists("bearer_token.txt"):
-                with open("bearer_token.txt", "r") as f1:
+            if os.path.exists(os.path.join(base, "bearer_token.txt")):
+                with open(os.path.join(base, "bearer_token.txt"), "r") as f1:
                     self.bearer = f1.read()
                 return self.bearer
             else:
@@ -792,7 +793,7 @@ class TwitterDownloader():
                     matches = await asyncio.to_thread(re.search, pattern, buf.decode("utf-8"))
                     if not matches:
                         raise Exception(f"Couldn't find bearer token.")
-                with open("bearer_token.txt", "w") as f1:
+                with open(os.path.join(base, "bearer_token.txt"), "w") as f1:
                     f1.write(matches.group(1))
                 self.bearer = matches.group(1)
                 return matches
