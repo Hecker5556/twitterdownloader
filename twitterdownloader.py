@@ -68,9 +68,14 @@ class TwitterDownloader():
                 mediaInfo['height'] = original_info.get("height")
                 result['medias'].append(mediaInfo)
         if mapEntry.get("quoted_tweet_results"):
-            quoted_tweet = records.get(records.get(mapEntry.get("quoted_tweet_results").get("__ref")).get("result").get("__ref"))
-            quoted_info = TwitterDownloader.serovalParseHelper(records, quoted_tweet)
-            result['quoted'] = quoted_info
+            if records.get(mapEntry.get("quoted_tweet_results").get("__ref")).get("result"):
+                quoted_tweet = records.get(records.get(mapEntry.get("quoted_tweet_results").get("__ref")).get("result").get("__ref"))
+                quoted_info = TwitterDownloader.serovalParseHelper(records, quoted_tweet)
+                result['quoted'] = quoted_info
+            else:
+                result['quoted'] = {
+                    'link': f"https://x.com/{result['author']['username']}/status/{records.get(mapEntry.get('quoted_tweet_results').get('__ref')).get('rest_id')}"
+                }
         if mapEntry.get("reply_to_results"):
             replyingto = records.get(mapEntry.get("reply_to_results").get("__ref"))
             url = f"https://x.com/{result['author']['username']}/status/{replyingto.get('rest_id')}"
