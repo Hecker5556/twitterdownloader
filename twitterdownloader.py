@@ -206,15 +206,7 @@ class TwitterDownloader():
                         if self.debug:
                             with open(os.path.join(base, "response.json"), "w") as f1:
                                 json.dump(a, f1) 
-                if not a['data']['tweetResult'].get("result") or (a["data"]["tweetResult"]["result"].get("__typename") and a["data"]["tweetResult"]["result"].get("__typename") in ["TweetUnavailable", "TweetTombstone"]):
-                    if not os.path.exists("env.py"):
-                        raise Exception("no credentials detected, make an env.py file, put csrf token, guest_id, auth_token there")
-
-                    result = await self._get_authenticated_tweet()
-                else:
-                    result = await self._tweet_result_parser(a['data']['tweetResult']["result"])
-                if not result.get("medias"):
-                    return result
+                result = await self._get_authenticated_tweet()
                 result['medias'] = await self._parse_media(result['medias'])
             else:
                 scriptPattern = r"</svg></div><script(?:.*?)class=\"\$tsr\"(?:.*?)>(.*?)</script>"
