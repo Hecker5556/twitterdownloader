@@ -5,6 +5,7 @@ from html import unescape
 from typing import Literal
 import mimetypes
 from tqdm import tqdm
+import base64
 import traceback
 LINKPATTERNS = [r'https://(?:x)?(?:twitter)?\.com/(?:.*?)/status/(\d*?)/?$', r'https://(?:x)?(?:twitter)?\.com/(?:.*?)/status/(\d*?)/(?:.*?)/\d$']
 MAX_FIELD_SIZE = 11000
@@ -21,13 +22,89 @@ with open("features_birdwatch.json", "r") as f1:
 class TwitterDownloader():
     def _give_connector(self, proxy: str):
         return aiohttp.TCPConnector() if not proxy else ProxyConnector.from_url(proxy)
+    @staticmethod
+    def serovalParseHelper(records: dict[str, dict|str], mapEntry: dict):
+        result = {}
+        if mapEntry.get("counts"):
+            counts = records.get(mapEntry.get("counts").get("__ref"))
+            result['likes'] = counts.get('favorite_count')
+            result['bookmarks'] = counts.get('bookmark_count')
+            result['replies'] = counts.get('reply_count')
+            result['retweets'] = counts.get('retweet_count')
+        if mapEntry.get("core"):
+            core = records.get(mapEntry.get("core").get("__ref"))
+            user_results = records.get(records.get(core.get("user_results").get("__ref")).get("result").get("__ref"))
+            core_user = records.get(user_results.get("core").get("__ref"))
+            avatar = records.get(user_results.get("avatar").get("__ref")).get("image_url")
+            result['author'] = {
+                'nick': core_user.get("name"),
+                'username': core_user.get("screen_name"),
+                'avatar': avatar,
+                'link': f'https://x.com/{core_user.get("screen_name")}'
+            }
+        result['medias'] = []
+        if mapEntry.get("media_entities2"):
+            media = mapEntry.get("media_entities2").get("__refs")
+            for i in media:
+                mediaEntry = records.get(i)
+                mediaInfo = {
+                    'type': mediaEntry.get('type')
+                }
+                if (mediaInfo['type'] == 'video' or mediaInfo['type'] == 'animated_gif'):
+                    mediaInfo.update({
+                        'variants': [],
+                        'thumbnail': mediaEntry.get("media_url_https"),
+                    })
+                    video_info = records.get(mediaEntry.get("video_info").get("__ref"))
+                    mediaInfo['duration_millis'] = video_info.get("duration_millis")
+                    for j in video_info.get('variants').get('__refs'):
+                        video_variant = records.get(j)
+                        mediaInfo['variants'].append(video_variant)
+                elif mediaInfo['type'] == 'photo':
+                    mediaInfo['url'] = mediaEntry.get("media_url_https")
+                    original_info = records.get(mediaEntry.get("original_info").get("__ref"))
+                    mediaInfo['width'] = original_info.get("width")
+                    mediaInfo['height'] = original_info.get("height")
+                result['medias'].append(mediaInfo)
+        if mapEntry.get("quoted_tweet_results"):
+            quoted_tweet = records.get(records.get(mapEntry.get("quoted_tweet_results").get("__ref")).get("result").get("__ref"))
+            quoted_info = TwitterDownloader.serovalParseHelper(records, quoted_tweet)
+            result['quoted'] = quoted_info
+        if mapEntry.get("reply_to_results"):
+            replyingto = records.get(mapEntry.get("reply_to_results").get("__ref"))
+            url = f"https://x.com/{result['author']['username']}/status/{replyingto.get('rest_id')}"
+            result['replying_to'] = {
+                'link': url
+            }
+        if mapEntry.get("details"):
+            details = records.get(mapEntry.get("details").get("__ref"))
+            result['full_text'] = details.get("full_text")
+            result['date_posted'] = int(details.get("created_at_ms", 0) / 1000)
+        if mapEntry.get("birdwatch_pivot"):
+            birdwatch = records.get(mapEntry.get("birdwatch_pivot").get("__ref"))
+            result['added_context'] = {
+                'url': birdwatch.get("destination_url"),
+                "text": records.get(records.get(birdwatch.get("note").get("__ref")).get("summary").get("__ref")).get("text")
+            }
+        if mapEntry.get("views"):
+            result['views'] = records.get(mapEntry.get("views").get("__ref")).get("count")
+        return result
+    @staticmethod
+    def serovalParse(data: dict):
+        records: dict[str, dict|str] = data['dehydratedData']['relayRecords']
+        mapEntry = None
+        for key, value in records['client:root'].items():
+            if isinstance(value, dict):
+                mapEntry = records.get(records.get(value['__ref']).get("result").get("__ref"))
+        result = TwitterDownloader.serovalParseHelper(records, mapEntry)
+        return result
     def __init__(self, proxy: str = None, debug: bool = False):
         self.proxy = proxy
         self.debug = debug
         self.base_url = "https://video.twimg.com"
         self.subtitles = None
         self.no_ffmpeg = False
-    async def download(self, link: str, max_size: int = None, return_media_url: bool = False, video_format: Literal['direct', 'dash'] = 'direct', caption_videos: bool = False):
+    async def download(self, link: str, max_size: int = None, return_media_url: bool = False, video_format: Literal['direct', 'dash'] = 'direct', caption_videos: bool = False, authenticated: bool = False):
         self.tweet_id = None
         for ptn in LINKPATTERNS:
             if id := re.search(ptn, link.split("?")[0]):
@@ -63,73 +140,105 @@ class TwitterDownloader():
         async with aiohttp.ClientSession(connector=self._give_connector(self.proxy), max_field_size=MAX_FIELD_SIZE) as session:
             if not hasattr(self, "session") or self.session.closed:
                 self.session = session
-            await self._get_bearer_token()
-            if (not hasattr(self, "restid") or not isinstance(self.restid, str)) or (not hasattr(self, "tweetdetail") or not isinstance(self.tweetdetail, str) or (not hasattr(self, "fetchnote") or not isinstance(self.fetchnote, str))):
-                if not os.path.exists("apiurls.json"):
-                    self.restid, self.tweetdetail, self.fetchnote = await self._get_api_url()
-                else:
-                    with open("apiurls.json", "r") as f1:
-                        thejson = json.load(f1)
-                        try:
-                            self.restid, self.tweetdetail, self.fetchnote = thejson["restid"], thejson["tweetdetail"], thejson['fetchnote']
-                        except KeyError:
-                            self.restid, self.tweetdetail, self.fetchnote = await self._get_api_url()
-            self.headers['authorization'] = self.bearer
-            guestoken = await self._get_guest_token()
-            if not hasattr(self, "cookies"):
-                self.cookies = {
-                    'gt': guestoken
-                }
-            else:
-                self.cookies["gt"] = guestoken
-            self.headers['x-guest-token'] = guestoken
-            
-            async with self.session.get(self.restid, cookies=self.cookies,params=params, headers=self.headers, ) as r:
-                a = await r.json()
-                if self.debug:
-                    with open("response.json", "w") as f1:
-                        json.dump(a, f1)
-            if not a.get('data'):
-                if self.debug:
-                    print(a['errors'])
-                if "guest" in a['errors'][0]['message']:
-                    os.remove("guesttoken.txt")
-                    guestoken = await self._get_guest_token()
-                    self.cookies["gt"] = guestoken
-                    self.headers['x-guest-token'] = guestoken
-                elif "token" in a['errors'][0]['message']:
-                    os.remove("bearer_token.txt")
-                    await self._get_bearer_token()
-                else:
-                    new_features = a['errors'][0]['message'].split(': ')[1].split(', ')
-                    for ft in new_features:
-                        if self.debug:
-                            print(f"adding new feature {ft} to features")
-                        FEATURES[ft] = True
-                    with open('features.json', 'w') as f1:
-                        json.dump(FEATURES, f1)
-                params = {
-                    'variables': json.dumps({"tweetId":self.tweet_id,"withCommunity":False,"includePromotedContent":False,"withVoice":False}),
-                    'features': json.dumps(FEATURES)
-                }
-                async with self.session.get(self.restid, cookies=self.cookies, headers=self.headers, params=params, ) as r:
-                    a = await r.json()
-                    if self.debug:
-                        with open("response.json", "w") as f1:
-                            json.dump(a, f1) 
-            if not a['data']['tweetResult'].get("result") or (a["data"]["tweetResult"]["result"].get("__typename") and a["data"]["tweetResult"]["result"].get("__typename") in ["TweetUnavailable", "TweetTombstone"]):
-                if not os.path.exists("env.py"):
-                    raise Exception("no credentials detected, make an env.py file, put csrf token, guest_id, auth_token there")
+            if authenticated:
                 from env import csrf, auth_token, guest_id
                 self.csrf = csrf
                 self.auth_token = auth_token
                 self.guest_id = guest_id
-                result = await self._get_authenticated_tweet()
+                self.cookies = {
+                    'guest_id': self.guest_id,
+                    'auth_token': self.auth_token,
+                    'ct0': self.csrf,
+                }
+                self.headers['x-csrf-token'] = self.csrf
+                await self._get_bearer_token()
+                if (not hasattr(self, "restid") or not isinstance(self.restid, str)) or (not hasattr(self, "tweetdetail") or not isinstance(self.tweetdetail, str) or (not hasattr(self, "fetchnote") or not isinstance(self.fetchnote, str))):
+                    if not os.path.exists("apiurls.json"):
+                        self.restid, self.tweetdetail, self.fetchnote = await self._get_api_url()
+                    else:
+                        with open("apiurls.json", "r") as f1:
+                            thejson = json.load(f1)
+                            try:
+                                self.restid, self.tweetdetail, self.fetchnote = thejson["restid"], thejson["tweetdetail"], thejson['fetchnote']
+                            except KeyError:
+                                self.restid, self.tweetdetail, self.fetchnote = await self._get_api_url()
+                self.headers['authorization'] = self.bearer
+                guestoken = await self._get_guest_token()
+                if not hasattr(self, "cookies"):
+                    self.cookies = {
+                        'gt': guestoken
+                    }
+                else:
+                    self.cookies["gt"] = guestoken
+                self.headers['x-guest-token'] = guestoken
+                
+                async with self.session.get(self.restid, cookies=self.cookies,params=params, headers=self.headers, ) as r:
+                    a = await r.json()
+                    if self.debug:
+                        with open("response.json", "w") as f1:
+                            json.dump(a, f1)
+                if not a.get('data'):
+                    if self.debug:
+                        print(a['errors'])
+                    if "guest" in a['errors'][0]['message']:
+                        os.remove("guesttoken.txt")
+                        guestoken = await self._get_guest_token()
+                        self.cookies["gt"] = guestoken
+                        self.headers['x-guest-token'] = guestoken
+                    elif "token" in a['errors'][0]['message']:
+                        os.remove("bearer_token.txt")
+                        await self._get_bearer_token()
+                    else:
+                        new_features = a['errors'][0]['message'].split(': ')[1].split(', ')
+                        for ft in new_features:
+                            if self.debug:
+                                print(f"adding new feature {ft} to features")
+                            FEATURES[ft] = True
+                        with open('features.json', 'w') as f1:
+                            json.dump(FEATURES, f1)
+                    params = {
+                        'variables': json.dumps({"tweetId":self.tweet_id,"withCommunity":False,"includePromotedContent":False,"withVoice":False}),
+                        'features': json.dumps(FEATURES)
+                    }
+                    async with self.session.get(self.restid, cookies=self.cookies, headers=self.headers, params=params, ) as r:
+                        a = await r.json()
+                        if self.debug:
+                            with open("response.json", "w") as f1:
+                                json.dump(a, f1) 
+                if not a['data']['tweetResult'].get("result") or (a["data"]["tweetResult"]["result"].get("__typename") and a["data"]["tweetResult"]["result"].get("__typename") in ["TweetUnavailable", "TweetTombstone"]):
+                    if not os.path.exists("env.py"):
+                        raise Exception("no credentials detected, make an env.py file, put csrf token, guest_id, auth_token there")
+
+                    result = await self._get_authenticated_tweet()
+                else:
+                    result = await self._tweet_result_parser(a['data']['tweetResult']["result"])
+                if not result.get("medias"):
+                    return result
+                result['medias'] = await self._parse_media(result['medias'])
             else:
-                result = await self._tweet_result_parser(a['data']['tweetResult']["result"])
-            if not result.get("medias"):
-                return result
-            result['medias'] = await self._parse_media(result['medias'])
+                scriptPattern = r"</svg></div><script(?:.*?)class=\"\$tsr\"(?:.*?)>(.*?)</script>"
+                async with self.session.get(link, headers=self.headers) as r:
+                    response = await r.text("utf-8")
+                    script = await asyncio.to_thread(re.search, scriptPattern, response)
+                    if not script:
+                        raise Exception("Couldnt find post info anonymously, use credentials")
+                script = script.group(1)
+                process = await asyncio.subprocess.create_subprocess_exec("node", *["extractJson.js"], stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE)
+                stdout, stderr = await process.communicate(script.encode())
+                if (process.returncode != 0):
+                    raise Exception("Errored in extracting json from source")
+                jsonResponse = await asyncio.to_thread(json.loads, stdout)
+                with open("newjson.json", "wb") as f1:
+                    f1.write(stdout)
+                if (jsonResponse['matches'][1]['s'] != "success"):
+                    raise Exception(f"Errored when fetching post: {jsonResponse['matches'][1]['s']}")
+                result = self.serovalParse(jsonResponse)
+                if not result.get("medias"):
+                    return result
+                await self._parse_seroval_videos(result['medias'])
+                
+
+
             self.result = result
             if return_media_url:
                 return result
@@ -251,7 +360,54 @@ class TwitterDownloader():
                         if not chunk:
                             break
                         f1.write(chunk)
-
+    async def _parse_seroval_videos(self, media: dict):
+        subtitles_pattern = r"\#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"(.*?)\",NAME=\"(.*?)\",(?:.*?)URI=\"(.*?)\""
+        audios_pattern = r"#EXT-X-MEDIA:NAME=\"Audio\",TYPE=AUDIO,GROUP-ID=\"(.*?)\",AUTOSELECT=YES,URI=\"(.*?)\""
+        videos_pattern = r"#EXT-X-STREAM-INF:AVERAGE-BANDWIDTH=(?:\d+),BANDWIDTH=(\d+),RESOLUTION=(\d+)x(\d+),CODECS=\"(.*?)\",(?:SUBTITLES=\"(.*?)\",)?AUDIO=\"(.*?)\"\n(.*?)\n"
+        for i in range(len(media)):
+            result = {}
+            if (media[i]['type'] in ['video', 'animated_gif']):
+                result['type'] = media[i]['type']
+                result['thumbnail'] = media[i]['thumbnail']
+                result['variants'] = {
+                    "direct": [],
+                    "dash": [],
+                }
+                if media[i]['type'] == 'video':
+                    duration = media[i]['duration_millis']/1000
+                    for j in media[i]['variants']:
+                        if j['content_type'] == 'application/x-mpegURL':
+                            async with self.session.get(j["url"], ) as r:
+                                rtext = await r.text()
+                            subtitles_match = re.findall(subtitles_pattern, rtext)
+                            subtitles = []
+                            for group_id, name, url in subtitles_match:
+                                subtitles.append({"id": group_id, "name": name, "url": self.base_url + url})
+                            audios_match = re.findall(audios_pattern, rtext)
+                            audios = []
+                            for group_id, url in audios_match:
+                                audios.append({"id": group_id, "url": self.base_url + url})
+                            videos_match = re.findall(videos_pattern, rtext)
+                            videos = []
+                            for bitrate, width, height, codecs, subtitle, audio, url in videos_match:
+                                for sb in subtitles:
+                                    if sb['id'] == subtitle:
+                                        subtitle = sb['url']
+                                        break
+                                for ad in audios:
+                                    if ad['id'] == audio:
+                                        audio = ad['url']
+                                        break
+                                videos.append({"bitrate": int(bitrate), "height": height, "width": width, "codecs": codecs, "subtitle": subtitle, "audio": audio, "url": self.base_url + url, "size": ((int(bitrate)*duration)/8)*0.9, "size_mb": (((int(bitrate)*duration)/8)*0.9)/(1024*1024), "type": "dash"})
+                            result['variants']["dash"] += videos
+                        else:
+                            match = re.search(r"https://video\.twimg\.com/(?:ext_tw_video|amplify_video)/(?:.*?)vid/(?:.*?)/?(\d+)x(\d+)/", j['url'])
+                            result['variants']["direct"].append({"bitrate": int(j['bitrate']), "url": j['url'], "height": match.group(2), "width": match.group(1), "size": (((int(j['bitrate']))*duration)/8)*0.9, "size_mb": (((int(j['bitrate']))*duration)/8)*0.9/(1024*1024), "type": "direct"})
+                    result['variants'] = {"direct": list(sorted(result['variants']['direct'], key=lambda x: x.get('size'), reverse=True)), "dash": list(sorted(result['variants']['dash'], key=lambda x: x.get('size'), reverse=True))}
+                else:
+                    for j in media[i]['variants']:
+                        result['variants']["direct"].append({"bitrate": int(j['bitrate']), "url": j['url'], "height": i['sizes']['large']['h'], "width": i['sizes']['large']['w'], "size": None, "size_mb": None, "type": "direct"})
+                media[i] = result
     async def _parse_media(self, media: dict):
         medias = []
         
@@ -550,7 +706,12 @@ class TwitterDownloader():
         
         if not hasattr(self, "jslink"):
             pattern = r'href=\"(https://abs\.twimg\.com/responsive-web/client-web/main\.(?:.*?)\.js)\"'
-            async with self.session.get(self.link, headers=self.headers, ) as r:
+            cookies = {
+                'guest_id': self.guest_id,
+                'auth_token': self.auth_token,
+                'ct0': self.csrf,
+            }
+            async with self.session.get(self.link, headers=self.headers, cookies=cookies) as r:
                 text = await r.text('utf-8')
                 matches = re.search(pattern ,text)
             if not matches:
@@ -568,7 +729,7 @@ class TwitterDownloader():
             self.jslink = matches.group(1)
         pattern2 = r'{queryId:\"(.*?)\",operationName:\"TweetResultByRestId\"'
         pattern3 = r'queryId:\"(.*?)\",operationName:\"TweetDetail\"'
-        async with self.session.get(self.jslink, headers=self.headers, ) as r:
+        async with self.session.get(self.jslink, headers=self.headers, cookies=cookies) as r:
             js = await r.text()
         location1 = js[js.find("TweetResultByRestId")-50:js.find("TweetResultByRestId")+50]
         location2 = js[js.find("TweetDetail")-50:js.find("TweetDetail")+50]
@@ -576,13 +737,15 @@ class TwitterDownloader():
         tweetdetail = re.search(pattern3, location2).group(1)
         restid = f'https://api.x.com/graphql/{restid}/TweetResultByRestId'
         tweetdetail = f'https://x.com/i/api/graphql/{tweetdetail}/TweetDetail'
-        js_fetchnote = r"(shared~bundle\.GrokDrawer~bundle\.ReaderMode~bundle\.Birdwatch~bundle\.TwitterArticles~bundle\.Compose~bundle\.Sett)\":\"(.*?)\""
+        js_fetchnote = r"(\d+)\:\"(shared~bundle\.GrokDrawer~bundle\.ReaderMode~bundle\.Birdwatch~bundle\.TwitterArticles~bundle\.Compose~bundle\.Sett)\""
         js_fetchnote_match = re.search(js_fetchnote, text)
+        key = js_fetchnote_match.group(1)
+        value = re.search(re.escape(key) + r":\"([^~]*?)\",", text)
         base_url = "https://abs.twimg.com/responsive-web/client-web/"
 
         fetchnote = None
         fetchnote_pattern = r":\"(.*?)\",operationName:\"BirdwatchFetchOneNote\",.*?}}"
-        async with self.session.get(base_url + js_fetchnote_match.group(1) + '.' + js_fetchnote_match.group(2) + "a" + ".js", ) as r:
+        async with self.session.get(base_url + js_fetchnote_match.group(2) + '.' +value.group(1) + "a" + ".js", cookies=cookies) as r:
             js_text = await r.text("utf-8")
         
         js_text = js_text.split("queryId")
@@ -603,24 +766,9 @@ class TwitterDownloader():
                 return self.bearer
             else:
                 # await self._post_data()
-                headers = {
-                    'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-                    'accept-language': 'en-US,en;q=0.8',
-                    'priority': 'u=0, i',
-                    'referer': 'https://x.com/',
-                    'sec-ch-ua': '"Brave";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
-                    'sec-ch-ua-mobile': '?0',
-                    'sec-ch-ua-platform': '"Windows"',
-                    'sec-fetch-dest': 'document',
-                    'sec-fetch-mode': 'navigate',
-                    'sec-fetch-site': 'cross-site',
-                    'sec-gpc': '1',
-                    'upgrade-insecure-requests': '1',
-                    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-                }
                 link = self.link if hasattr(self, "link") else "https://x.com"
                 
-                async with self.session.get(link, headers=headers, params={"mx": 2}) as r:
+                async with self.session.get(link, headers=self.headers, params={"mx": 2}, cookies=self.cookies) as r:
                     pattern = r'href=\"(https://abs\.twimg\.com/responsive-web/client-web/main\.(?:.*?)\.js)\"'
                     text = await r.text()
                     matches = re.search(pattern, text)
@@ -980,10 +1128,11 @@ async def main():
     parser.add_argument("-p", "--proxy", type=str, help="https/socks proxy to use")
     parser.add_argument("-d", "--dash",default=False, action="store_true", help="download dash video format instead of direct")
     parser.add_argument("-c", "--caption", action="store_true", help="burn in twitter given captions into the video")
+    parser.add_argument("-a", "--authenticated", help="use credentials for all requests", action="store_true")
     parser.add_argument("-dbg", "--debug", action="store_true", help="debug settings")
     args = parser.parse_args()
     downloader = TwitterDownloader(args.proxy, args.debug)
-    result = await downloader.download(link = args.link, max_size=args.max_size, return_media_url=args.return_url,video_format= "dash" if args.dash else "direct",caption_videos= args.caption)
+    result = await downloader.download(link = args.link, max_size=args.max_size, return_media_url=args.return_url,video_format= "dash" if args.dash else "direct",caption_videos= args.caption, authenticated=args.authenticated)
     print(json.dumps(result, indent=4, ensure_ascii=False))
 async def chatting():
     """example function to chat with grok in console"""
