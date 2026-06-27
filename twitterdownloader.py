@@ -177,7 +177,6 @@ class TwitterDownloader():
                 else:
                     self.cookies["gt"] = guestoken
                 self.headers['x-guest-token'] = guestoken
-                
                 async with self.session.get(self.restid, cookies=self.cookies,params=params, headers=self.headers, ) as r:
                     a = await r.json()
                     if self.debug:
@@ -509,7 +508,7 @@ class TwitterDownloader():
             else:
                 raise Exception(f"Fetching data errored!: {result['errors'][0]['message']}")
         for i in eval(f'result{self._path_parser(self._find_key(result, "entries"))}')[::-1]:
-            if "tweet" in i.get("entryId"):
+            if i.get("content", {}).get("entryType") == "TimelineTimelineItem":
                 entry = i
                 break
         resp_type = False if entry["content"].get("items") else True
@@ -694,15 +693,14 @@ class TwitterDownloader():
             'upgrade-insecure-requests': '1',
             'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
         }
-        pattern = r"document\.cookie=\"gt=(\d+);"
-        async with self.session.get("https://x.com", headers=headers) as r:
-            response = await r.text("utf8")
-            if (match := re.search(pattern, response)):
-                guesttoken = match.group(1)
-                with open(os.path.join(base, "guesttoken.txt"), "w") as f1:
-                    f1.write(f"{guesttoken}\t{(datetime.now()+timedelta(seconds=900)).isoformat()}")
-                return guesttoken
-        return None
+        bearer = await self._get_bearer_token()
+        headers['authorization'] = self.bearer
+        async with self.session.post("https://api.x.com/1.1/guest/activate.json", headers=headers) as r:
+            guestCookie = r.cookies.get("guest_id")
+        if guestCookie is not None:
+            with open(os.path.join(base, "guesttoken.txt"), "w") as f1:
+                f1.write(f"{guestCookie.value}\t{(datetime.now()+timedelta(days=7)).isoformat()}")
+            return guestCookie.value
     async def _get_api_url(self):
         
         if not hasattr(self, "jslink"):
@@ -796,7 +794,7 @@ class TwitterDownloader():
                 with open(os.path.join(base, "bearer_token.txt"), "w") as f1:
                     f1.write(matches.group(1))
                 self.bearer = matches.group(1)
-                return matches
+                return self.bearer
     async def _post_data(self):
         
         headers = {
