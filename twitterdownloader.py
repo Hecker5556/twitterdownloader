@@ -230,8 +230,6 @@ class TwitterDownloader():
                 if (jsonResponse['matches'][1]['s'] != "success"):
                     raise Exception(f"Errored when fetching post: {jsonResponse['matches'][1]['s']}")
                 result = self.serovalParse(jsonResponse)
-                if not result.get("medias"):
-                    return result
                 await self._parse_seroval_videos(result['medias'])
                 if result.get("quoted") is not None and len(result.get("quoted").get("medias")) > 0:
                     await self._parse_seroval_videos(result['quoted']['medias'])
