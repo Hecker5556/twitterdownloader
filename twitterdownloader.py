@@ -100,8 +100,9 @@ class TwitterDownloader():
         records: dict[str, dict|str] = data['dehydratedData']['relayRecords']
         mapEntry = None
         for key, value in records['client:root'].items():
-            if isinstance(value, dict):
+            if isinstance(value, dict) and "tweet_result" in key:
                 mapEntry = records.get(records.get(value['__ref']).get("result").get("__ref"))
+                break
         result = TwitterDownloader.serovalParseHelper(records, mapEntry)
         return result
     def __init__(self, proxy: str = None, debug: bool = False):
