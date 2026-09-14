@@ -22,7 +22,10 @@ with open(os.path.join(base, "features_birdwatch.json"), "r") as f1:
     FEATURES_BIRDWATCH = json.load(f1)
 class TwitterDownloader():
     def _give_connector(self, proxy: str):
-        return aiohttp.TCPConnector() if not proxy else ProxyConnector.from_url(proxy)
+        import ssl
+        import certifi
+        ssl_ctx = ssl.create_default_context(cafile=certifi.where())
+        return aiohttp.TCPConnector(ssl=ssl_ctx) if not proxy else ProxyConnector.from_url(proxy, ssl=ssl_ctx)
     @staticmethod
     def serovalParseHelper(records: dict[str, dict|str], mapEntry: dict):
         result = {}
@@ -111,6 +114,33 @@ class TwitterDownloader():
         self.base_url = "https://video.twimg.com"
         self.subtitles = None
         self.no_ffmpeg = False
+    @staticmethod
+    def rawParse(data: dict):
+        post = data['entities']['tweets']['entities'][(list(data['entities']['tweets']['entities'].keys())[0])]
+        info = {}
+        info['medias'] = post.get("entities", {}).get("media")
+        authorInfo = data['entities']['users']['entities'][(list(data['entities']['users']['entities'].keys())[0])]
+        info['author'] = {
+            'username': authorInfo.get("screen_name"),
+            'nick': authorInfo.get("name"),
+            'link': f'https://x.com/{authorInfo.get("screen_name")}' if authorInfo.get("screen_name") else None,
+            'avatar': authorInfo.get("profile_image_url_https"),
+        }
+        info['likes'] = post.get("favorite_count")
+        info['bookmarks'] = post.get("bookmark_count")
+        info['replies'] = post.get("reply_count")
+        info['retweets'] = post.get("retweet_count")
+        if post.get("in_reply_to_status_id_str") is not None:
+            info['replying_to'] = {'link': f'https://x.com/{post.get("in_reply_to_screen_name")}/status/{post.get("in_reply_to_status_id_str")}'}
+        if post.get("quoted_status_result") or post.get("is_quote_status"):
+            info['quoted'] = {'link': post.get('quoted_status_permalink').get('expanded')}
+        info['link'] = f"https://x.com/{info['author']['username']}/status/{post['id_str']}"
+        info['date_posted'] = post.get("created_at").replace("Z", "+00:00")
+        if info.get("birdwatch_pivot"):
+            note_url = info['birdwatch_pivot'].get('destinationUrl')
+            info['added_context'] = {'url': note_url, 'text': post['birdwatch_pivot']['subtitle']['text'], 'authenticated_fetch': False}
+        info['nsfw'] = post.get("possibly_sensitive")
+        return info
     async def download(self, link: str, max_size: int = None, return_media_url: bool = False, video_format: Literal['direct', 'dash'] = 'direct', caption_videos: bool = False, authenticated: bool = False):
         self.tweet_id = None
         for ptn in LINKPATTERNS:
@@ -214,29 +244,50 @@ class TwitterDownloader():
                 result = await self._get_authenticated_tweet()
                 result['medias'] = await self._parse_media(result['medias'])
             else:
-                scriptPattern = r"</svg></div><script(?:.*?)class=\"\$tsr\"(?:.*?)>(.*?)</script>"
+                scriptPattern = r"</svg></div><script(?:.*?)class=\"\$tsr\"(?:.*?)>([\s\S]*?)</script>"
+                rawPattern = r"window\.__INITIAL_STATE__=(\{.*?\}\}\}),"
+                script = None
+                raw = None
                 async with self.session.get(link, headers=self.headers) as r:
                     response = await r.text("utf-8")
                     script = await asyncio.to_thread(re.search, scriptPattern, response)
                     if not script:
-                        raise Exception("Couldnt find post info anonymously, use credentials")
-                script = script.group(1)
-                process = await asyncio.subprocess.create_subprocess_exec("node", *[os.path.join(base, "extractJson.js")], stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE)
-                stdout, stderr = await process.communicate(script.encode())
-                if (process.returncode != 0):
-                    raise Exception("Errored in extracting json from source")
-                jsonResponse = await asyncio.to_thread(json.loads, stdout)
-                with open("newjson.json", "wb") as f1:
-                    f1.write(stdout)
-                if (jsonResponse['matches'][1]['s'] != "success"):
-                    raise Exception(f"Errored when fetching post: {jsonResponse['matches'][1]['s']}")
-                result = self.serovalParse(jsonResponse)
-                await self._parse_seroval_videos(result['medias'])
-                if result.get("quoted") is not None and len(result.get("quoted").get("medias")) > 0:
-                    await self._parse_seroval_videos(result['quoted']['medias'])
+                        raw = await asyncio.to_thread(re.search, rawPattern, response)
+                        if not raw:
+                            raise Exception("Couldnt find post info anonymously, use credentials")
+                if script:
+                    script = script.group(1)
+                    process = await asyncio.subprocess.create_subprocess_exec("node", *[os.path.join(base, "extractJson.js")], stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE)
+                    stdout, stderr = await process.communicate(script.encode())
+                    if (process.returncode != 0):
+                        raise Exception("Errored in extracting json from source")
+                    jsonResponse = await asyncio.to_thread(json.loads, stdout)
+                    with open("newjson.json", "wb") as f1:
+                        f1.write(stdout)
+                    if (jsonResponse['matches'][1]['s'] != "success"):
+                        raise Exception(f"Errored when fetching post: {jsonResponse['matches'][1]['s']}")
+                    if (jsonResponse['matches'][1]['l']['metadata']['status'] == 'unavailable'):
+                        raise Exception(f"Errored when fetching post: {jsonResponse['matches'][1]['l']['metadata']['text']}")
+                    result = self.serovalParse(jsonResponse)
+                    await self._parse_seroval_videos(result['medias'])
+                    if result.get("quoted") is not None and len(result.get("quoted").get("medias")) > 0:
+                        await self._parse_seroval_videos(result['quoted']['medias'])
+                else:
+                    raw = raw.group(1) + '}'
+                    rawResponse = await asyncio.to_thread(json.loads, raw.replace("&#x3D;", "="))
+                    result = self.rawParse(rawResponse)
+                    if result.get("medias"):
+                        result['medias'] = await self._parse_media(result['medias'])
+                    if result.get("quoted") is not None:
+                        try:
+                            result['quoted'] = await self.download(result['quoted']['link'], max_size, return_media_url, video_format, caption_videos, authenticated)
+                        except Exception as e:
+                            result['quoted']['error'] = str(e)
                 if result.get("replying_to") is not None:
-                    result['replying_to'] = await self.download(result['replying_to']['link'], max_size, return_media_url, video_format, caption_videos, authenticated)
-
+                    try:
+                        result['replying_to'] = await self.download(result['replying_to']['link'], max_size, return_media_url, video_format, caption_videos, authenticated)
+                    except Exception as e:
+                        result['replying_to']['error'] = str(e)
 
             self.result = result
             if return_media_url:
@@ -423,8 +474,12 @@ class TwitterDownloader():
                     duration = i['video_info']['duration_millis']/1000
                     for j in i['video_info']['variants']:
                         if j['content_type'] == 'application/x-mpegURL':
-                            async with self.session.get(j["url"], ) as r:
-                                rtext = await r.text()
+                            try:
+                                async with self.session.get(j["url"], ) as r:
+                                    rtext = await r.text()
+                            except Exception as e:
+                                print(e, j['url'])
+                                continue
                             subtitles_match = re.findall(subtitles_pattern, rtext)
                             subtitles = []
                             for group_id, name, url in subtitles_match:
@@ -603,7 +658,10 @@ class TwitterDownloader():
                     info['quoted']['author']['avatar'] = eval(f"quoted{self._path_parser(self._find_key(quoted, 'image_url'))}")
                 info["quoted"]['link'] = tweet_results['legacy'].get('quoted_status_permalink').get('expanded')
         elif reply := tweet_results['legacy'].get("in_reply_to_status_id_str"):
-            info["replying_to"] = await self.download(f'https://x.com/{tweet_results["legacy"].get("in_reply_to_screen_name")}/status/{reply}', return_media_url=True)
+            try:
+                info["replying_to"] = await self.download(f'https://x.com/{tweet_results["legacy"].get("in_reply_to_screen_name")}/status/{reply}', return_media_url=True, authenticated=True if hasattr(self, "csrf") else False)
+            except Exception as e:
+                info["replying_to"] = {"error": str(e)}
         info["link"] = f"https://x.com/{info['author']['username']}/status/{tweet_results['legacy']['id_str']}"
         info["date_posted"] = datetime.strptime(tweet_results['legacy'].get('created_at'), "%a %b %d %H:%M:%S %z %Y").timestamp()
         info["bookmarks"] = tweet_results['legacy'].get("bookmark_count", 0)
