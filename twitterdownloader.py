@@ -73,18 +73,28 @@ class TwitterDownloader():
         if mapEntry.get("quoted_tweet_results"):
             if records.get(mapEntry.get("quoted_tweet_results").get("__ref")).get("result"):
                 quoted_tweet = records.get(records.get(mapEntry.get("quoted_tweet_results").get("__ref")).get("result").get("__ref"))
-                quoted_info = TwitterDownloader.serovalParseHelper(records, quoted_tweet)
-                result['quoted'] = quoted_info
+                if quoted_tweet.get("unavailable_reason"):
+                    result['quoted'] = {
+                        'error': quoted_tweet.get("unavailable_reason"),
+                    }
+                else:
+                    quoted_info = TwitterDownloader.serovalParseHelper(records, quoted_tweet)
+                    result['quoted'] = quoted_info
             else:
                 result['quoted'] = {
                     'link': f"https://x.com/{result['author']['username']}/status/{records.get(mapEntry.get('quoted_tweet_results').get('__ref')).get('rest_id')}"
                 }
         if mapEntry.get("reply_to_results"):
             replyingto = records.get(mapEntry.get("reply_to_results").get("__ref"))
-            url = f"https://x.com/{result['author']['username']}/status/{replyingto.get('rest_id')}"
-            result['replying_to'] = {
-                'link': url
-            }
+            if replyingto.get("unavailable_reason"):
+                result['replying_to'] = {
+                    'error': replyingto.get("unavailable_reason")
+                }
+            else:
+                url = f"https://x.com/{result['author']['username']}/status/{replyingto.get('rest_id')}"
+                result['replying_to'] = {
+                    'link': url
+                }
         if mapEntry.get("details"):
             details = records.get(mapEntry.get("details").get("__ref"))
             result['full_text'] = details.get("full_text")
@@ -270,7 +280,7 @@ class TwitterDownloader():
                         raise Exception(f"Errored when fetching post: {jsonResponse['matches'][1]['l']['metadata']['text']}")
                     result = self.serovalParse(jsonResponse)
                     await self._parse_seroval_videos(result['medias'])
-                    if result.get("quoted") is not None and len(result.get("quoted").get("medias")) > 0:
+                    if result.get("quoted") is not None and len(result.get("quoted").get("medias", [])) > 0:
                         await self._parse_seroval_videos(result['quoted']['medias'])
                 else:
                     raw = raw.group(1) + '}'
