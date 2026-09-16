@@ -276,7 +276,7 @@ class TwitterDownloader():
                         f1.write(stdout)
                     if (jsonResponse['matches'][1]['s'] != "success"):
                         raise Exception(f"Errored when fetching post: {jsonResponse['matches'][1]['s']}")
-                    if (jsonResponse['matches'][1]['l']['metadata']['status'] == 'unavailable'):
+                    if (jsonResponse['matches'][1].get('l', {}).get('metadata', {}).get('status', '') == 'unavailable'):
                         raise Exception(f"Errored when fetching post: {jsonResponse['matches'][1]['l']['metadata']['text']}")
                     result = self.serovalParse(jsonResponse)
                     await self._parse_seroval_videos(result['medias'])
