@@ -8,7 +8,7 @@ from tqdm import tqdm
 import base64
 import traceback
 LINKPATTERNS = [r'https://(?:x)?(?:twitter)?\.com/(?:.*?)/status/(\d*?)/?$', r'https://(?:x)?(?:twitter)?\.com/(?:.*?)/status/(\d*?)/(?:.*?)/\d$']
-MAX_FIELD_SIZE = 11000
+MAX_FIELD_SIZE = 25000
 base = os.path.dirname(os.path.abspath(__file__))
 if not os.path.exists(os.path.join(base, 'features.json')):
     with open(os.path.join(base, 'features.json'), 'w') as f1:
