@@ -995,24 +995,27 @@ class Grok(TwitterDownloader):
             }
             async with self.session.get("https://x.com/i/grok", headers=headers, cookies=self.cookies) as r:
                 rtext = await r.text("utf-8")
-            js_pattern = r"(\d+):\"(shared~ondemand(?:[^\"]*?)~bundle\.GrokDrawer)\""
-            js_match = await asyncio.to_thread(re.search, js_pattern, rtext)
+            js_pattern = r"(\d+):\"((?:[^\"]*?)GrokDrawer(?:[^\"]*?))\","
+            js_match = await asyncio.to_thread(re.findall, js_pattern, rtext)
             base_url = "https://abs.twimg.com/responsive-web/client-web/"
             queryId = None
             if not js_match:
                 raise Exception(f"Couldnt fetch queryid for grok api")
-            sett_pattern = fr"{js_match.group(1)}:\"([\w\d]+)\","
-            setting = await asyncio.to_thread(re.search, sett_pattern, rtext)
-            if not setting:
-                raise Exception(f"Couldn't find setting id for grok api")
-            async with self.session.get(base_url + js_match.group(2) + '.' + setting.group(1) + "a" + ".js" ) as r:
-                js_text = await r.text("utf-8")
-                queryId_pattern = r":\"(.*?)\",operationName:\"CreateGrokConversation\",.*?}}"
-                js_text = js_text.split("queryId")
-                for i in js_text:
-                    if queryId:=(await asyncio.to_thread(re.search, queryId_pattern, i)):
-                        queryId = queryId.group(1)
-                        break
+            for number, url in js_match:
+                sett_pattern = fr"{number}:\"([\w\d]+)\","
+                setting = await asyncio.to_thread(re.search, sett_pattern, rtext)
+                if not setting:
+                    raise Exception(f"Couldn't find setting id for grok api")
+                async with self.session.get(base_url + url + '.' + setting.group(1) + "a" + ".js" ) as r:
+                    js_text = await r.text("utf-8")
+                    queryId_pattern = r":\"(.*?)\",operationName:\"CreateGrokConversation\",.*?}}"
+                    js_text = js_text.split("queryId")
+                    for i in js_text:
+                        if queryId:=(await asyncio.to_thread(re.search, queryId_pattern, i)):
+                            queryId = queryId.group(1)
+                            break
+                if queryId:
+                    break
             if not queryId:
                 raise Exception(f"Couldnt fetch queryid for grok api")
             self.queryId = queryId
@@ -1251,4 +1254,4 @@ async def chatting():
                 print("Grok thought: ")
                 print(response.get("thinking"))
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(chatting())
