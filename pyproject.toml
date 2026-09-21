@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "twitterdownloader"
+version = "0.1.0"
+description = "Download posts from X, talk with Grok"
+readme = "README.md"
+requires-python = ">=3.8"
+
+dependencies = [
+"aiohttp",
+"tqdm",
+"aiohttp_socks",
+]

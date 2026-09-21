@@ -1,4 +1,3 @@
 aiohttp
 tqdm
 aiohttp_socks
-emoji
