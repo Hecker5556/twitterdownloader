@@ -5,7 +5,6 @@ from html import unescape
 from typing import Literal
 import mimetypes
 from tqdm import tqdm
-import base64
 import traceback
 LINKPATTERNS = [r'https://(?:x)?(?:twitter)?\.com/(?:.*?)/status/(\d*?)/?$', r'https://(?:x)?(?:twitter)?\.com/(?:.*?)/status/(\d*?)/(?:.*?)/\d$']
 MAX_FIELD_SIZE = 25000
