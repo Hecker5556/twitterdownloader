@@ -108,14 +108,54 @@ class TwitterDownloader():
             result['views'] = records.get(mapEntry.get("views").get("__ref")).get("count")
         return result
     @staticmethod
+    def beforeDehydrationHelper(data: dict, is_quoted: bool = False):
+        if is_quoted is False:
+            by_rest_id = TwitterDownloader.find(data['dehydratedData']['messagesBeforeDehydration'], "tweet_result_by_rest_id")
+            tweet_result = by_rest_id['result']
+        else:
+            tweet_result = data['result']
+        result = {
+            'author': {
+                'username': tweet_result['core']['user_results']['result']['core']['screen_name'],
+                'nickname': tweet_result['core']['user_results']['result']['core']['name'],
+                'avatar': tweet_result['core']['user_results']['result']['avatar']['image_url'],
+                'link': f"https://x.com/{tweet_result['core']['user_results']['result']['core']['screen_name']}"
+            },
+            'likes': tweet_result['counts']['favorite_count'],
+            'bookmarks': tweet_result['counts']['bookmark_count'],
+            'quotes': tweet_result['counts']['quote_count'],
+            'replies': tweet_result['counts']['reply_count'],
+            'retweets': tweet_result['counts']['retweet_count'],
+            'views': tweet_result['views']['count'],
+            'caption': tweet_result['details'].get('full_text'),
+            'medias': tweet_result['media_entities2'],
+            'link': f"https://x.com/{tweet_result['core']['user_results']['result']['core']['screen_name']}/status/{by_rest_id['rest_id'] if is_quoted is False else data['rest_id']}",
+            'created_at': int(tweet_result['details'].get("created_at_ms", 0) / 1000),
+        }
+        if tweet_result.get('quoted_tweet_results'):
+            result['quoted'] = TwitterDownloader.beforeDehydrationHelper(tweet_result.get('quoted_tweet_results'), True)
+        if tweet_result.get('reply_to_user_results'):
+            result['replying_to'] = {
+                'link': f"https://x.com/{tweet_result['reply_to_user_results']['result']['core']['screen_name']}/status/{tweet_result['reply_to_results']['rest_id']}"
+            }
+        if tweet_result.get('birdwatch_pivot'):
+            result['added_context'] = {
+                'url': result['birdwatch_pivot'].get("destination_url"),
+                "text": TwitterDownloader.find(result, "note").get("text")
+            }
+        return result
+    @staticmethod
     def serovalParse(data: dict):
-        records: dict[str, dict|str] = data['dehydratedData']['relayRecords']
-        mapEntry = None
-        for key, value in records['client:root'].items():
-            if isinstance(value, dict) and "tweet_result" in key:
-                mapEntry = records.get(records.get(value['__ref']).get("result").get("__ref"))
-                break
-        result = TwitterDownloader.serovalParseHelper(records, mapEntry)
+        if data['dehydratedData'].get('relayRecords'):
+            records: dict[str, dict|str] = data['dehydratedData']['relayRecords']
+            mapEntry = None
+            for key, value in records['client:root'].items():
+                if isinstance(value, dict) and "tweet_result" in key:
+                    mapEntry = records.get(records.get(value['__ref']).get("result").get("__ref"))
+                    break
+            result = TwitterDownloader.serovalParseHelper(records, mapEntry)
+        elif data['dehydratedData'].get('messagesBeforeDehydration'):
+            result = TwitterDownloader.beforeDehydrationHelper(data)
         return result
     def __init__(self, proxy: str = None, debug: bool = False):
         self.proxy = proxy
@@ -256,14 +296,17 @@ class TwitterDownloader():
                 scriptPattern = r"</svg></div><script(?:.*?)class=\"\$tsr\"(?:.*?)>([\s\S]*?)</script>"
                 rawPattern = r"window\.__INITIAL_STATE__=(\{.*?\}\}\}),"
                 script = None
+                scripts = None
                 raw = None
                 async with self.session.get(link, headers=self.headers) as r:
                     response = await r.text("utf-8")
                     script = await asyncio.to_thread(re.search, scriptPattern, response)
                     if not script:
-                        raw = await asyncio.to_thread(re.search, rawPattern, response)
-                        if not raw:
-                            raise Exception("Couldnt find post info anonymously, use credentials")
+                        scripts = await asyncio.to_thread(re.findall, r"<script[^>]*>([\s\S]*?)</script>", response)
+                        if not scripts:
+                            raw = await asyncio.to_thread(re.search, rawPattern, response)
+                            if not raw:
+                                raise Exception("Couldnt find post info anonymously, use credentials")
                 if script:
                     script = script.group(1)
                     process = await asyncio.subprocess.create_subprocess_exec("node", *[os.path.join(base, "extractJson.js")], stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE)
@@ -281,6 +324,39 @@ class TwitterDownloader():
                     await self._parse_seroval_videos(result['medias'])
                     if result.get("quoted") is not None and len(result.get("quoted").get("medias", [])) > 0:
                         await self._parse_seroval_videos(result['quoted']['medias'])
+                elif scripts is not None:
+                    tsr_scripts = []
+                    for match in scripts:
+                        code = match.strip()
+                        if (await asyncio.to_thread(re.search, r'\$R\s*=|self\.\$R|\$_TSR|GraphQLRequestStream|tsr-stream-part|\$R\[\d+\]\.next', code)):
+                            code = await asyncio.to_thread(re.sub, r'\{let s=document\.currentScript[\s\S]*$', '', code)
+                            code = await asyncio.to_thread(re.sub, r'document\.currentScript\.remove\(\);?', '', code)
+                            code = await asyncio.to_thread(re.sub, r'/\*\s*\$tsr-stream-boundary\s*\*/', '', code)
+                            code = await asyncio.to_thread(re.sub, r'document\.dispatchEvent\(new Event\("x-web:bootstrap-data"\)\);?', '', code)
+                            code = code.strip()
+                            if len(code) > 50:
+                                tsr_scripts.append(code)
+                    process = await asyncio.subprocess.create_subprocess_exec("node", *[os.path.join(base, "extractJson.js")], stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE)
+                    stdout, stderr = await process.communicate(("\n".join(tsr_scripts)).encode())
+                    if (process.returncode != 0):
+                        raise Exception("Errored in extracting json from source")
+                    jsonResponse = await asyncio.to_thread(json.loads, stdout)
+                    with open("newjson.json", "wb") as f1:
+                        f1.write(stdout)
+                    if (jsonResponse['matches'][1]['s'] != "success"):
+                        raise Exception(f"Errored when fetching post: {jsonResponse['matches'][1]['s']}")
+                    if (jsonResponse['matches'][1].get('l', {}).get('metadata', {}).get('status', '') == 'unavailable'):
+                        raise Exception(f"Errored when fetching post: {jsonResponse['matches'][1]['l']['metadata']['text']}")
+                    result = self.serovalParse(jsonResponse)
+                    result['medias'] = await self._parse_media(result['medias'])
+                    if result.get("quoted") is not None and len(result.get("quoted").get("medias", [])) > 0:
+                       result['quoted']['medias'] = await self._parse_media(result['quoted']['medias'])
+                    if result.get("replying_to") is not None:
+                        try:
+                            result['replying_to'] = await self.download(result['replying_to']['link'], max_size, return_media_url, video_format, caption_videos, authenticated)
+                        except Exception as e:
+                            traceback.print_exc()
+                            result['replying_to']['error'] = str(e)
                 else:
                     raw = raw.group(1) + '}'
                     rawResponse = await asyncio.to_thread(json.loads, raw.replace("&#x3D;", "="))
@@ -296,6 +372,7 @@ class TwitterDownloader():
                     try:
                         result['replying_to'] = await self.download(result['replying_to']['link'], max_size, return_media_url, video_format, caption_videos, authenticated)
                     except Exception as e:
+                        traceback.print_exc()
                         result['replying_to']['error'] = str(e)
 
             self.result = result
@@ -457,11 +534,11 @@ class TwitterDownloader():
                                     if ad['id'] == audio:
                                         audio = ad['url']
                                         break
-                                videos.append({"bitrate": int(bitrate), "height": height, "width": width, "codecs": codecs, "subtitle": subtitle, "audio": audio, "url": self.base_url + url, "size": ((int(bitrate)*duration)/8)*0.9, "size_mb": (((int(bitrate)*duration)/8)*0.9)/(1024*1024), "type": "dash"})
+                                videos.append({"bitrate": int(bitrate), "height": height, "width": width, "codecs": codecs, "subtitle": subtitle, "audio": audio, "url": self.base_url + url, "size": int(((int(bitrate)*duration)/8)*0.9), "size_mb": round((((int(bitrate)*duration)/8)*0.9)/(1024*1024), 3), "type": "dash"})
                             result['variants']["dash"] += videos
                         else:
                             match = re.search(r"https://video\.twimg\.com/(?:ext_tw_video|amplify_video)/(?:.*?)vid/(?:.*?)/?(\d+)x(\d+)/", j['url'])
-                            result['variants']["direct"].append({"bitrate": int(j['bitrate']), "url": j['url'], "height": match.group(2), "width": match.group(1), "size": (((int(j['bitrate']))*duration)/8)*0.9, "size_mb": (((int(j['bitrate']))*duration)/8)*0.9/(1024*1024), "type": "direct"})
+                            result['variants']["direct"].append({"bitrate": int(j['bitrate']), "url": j['url'], "height": match.group(2), "width": match.group(1), "size": int((((int(j['bitrate']))*duration)/8)*0.9), "size_mb": round((((int(j['bitrate']))*duration)/8)*0.9/(1024*1024), 3), "type": "direct"})
                     result['variants'] = {"direct": list(sorted(result['variants']['direct'], key=lambda x: x.get('size'), reverse=True)), "dash": list(sorted(result['variants']['dash'], key=lambda x: x.get('size'), reverse=True))}
                 else:
                     for j in media[i]['variants']:
@@ -508,11 +585,11 @@ class TwitterDownloader():
                                     if ad['id'] == audio:
                                         audio = ad['url']
                                         break
-                                videos.append({"bitrate": int(bitrate), "height": height, "width": width, "codecs": codecs, "subtitle": subtitle, "audio": audio, "url": self.base_url + url, "size": ((int(bitrate)*duration)/8)*0.9, "size_mb": (((int(bitrate)*duration)/8)*0.9)/(1024*1024), "type": "dash"})
+                                videos.append({"bitrate": int(bitrate), "height": height, "width": width, "codecs": codecs, "subtitle": subtitle, "audio": audio, "url": self.base_url + url, "size": int(((int(bitrate)*duration)/8)*0.9), "size_mb": round((((int(bitrate)*duration)/8)*0.9)/(1024*1024), 3), "type": "dash"})
                             mdia['variants']["dash"] += videos
                         else:
                             match = re.search(r"https://video\.twimg\.com/(?:ext_tw_video|amplify_video)/(?:.*?)vid/(?:.*?)/?(\d+)x(\d+)/", j['url'])
-                            mdia['variants']["direct"].append({"bitrate": int(j['bitrate']), "url": j['url'], "height": match.group(2), "width": match.group(1), "size": (((int(j['bitrate']))*duration)/8)*0.9, "size_mb": (((int(j['bitrate']))*duration)/8)*0.9/(1024*1024), "type": "direct"})
+                            mdia['variants']["direct"].append({"bitrate": int(j['bitrate']), "url": j['url'], "height": match.group(2), "width": match.group(1), "size": int((((int(j['bitrate']))*duration)/8)*0.9), "size_mb": round((((int(j['bitrate']))*duration)/8)*0.9/(1024*1024), 3), "type": "direct"})
                     mdia['variants'] = {"direct": list(sorted(mdia['variants']['direct'], key=lambda x: x.get('size'), reverse=True)), "dash": list(sorted(mdia['variants']['dash'], key=lambda x: x.get('size'), reverse=True))}
                 else:
                     for j in i['video_info']['variants']:
@@ -585,6 +662,22 @@ class TwitterDownloader():
         if not tweet_results.get("legacy"):
             tweet_results = tweet_results["tweet"]
         return await self._tweet_result_parser(tweet_results)
+    @staticmethod
+    def find(obj: dict|list, searched_key: str):
+        if isinstance(obj, dict):
+            for key, value in obj.items():
+                if key == searched_key:
+                    return value
+                else:
+                    result = TwitterDownloader.find(value, searched_key)
+                    if result:
+                        return result
+        elif isinstance(obj, list):
+            for i in obj:
+                result = TwitterDownloader.find(i, searched_key)
+                if result:
+                    return result
+        return None
     @staticmethod
     def _find_key(obj, searching_for: str, not_null: bool = True):
         path = []
@@ -1253,4 +1346,4 @@ async def chatting():
                 print("Grok thought: ")
                 print(response.get("thinking"))
 if __name__ == "__main__":
-    asyncio.run(chatting())
+    asyncio.run(main())
