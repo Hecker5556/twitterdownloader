@@ -1,3 +1,4 @@
 aiohttp
 tqdm
 aiohttp_socks
+certifi

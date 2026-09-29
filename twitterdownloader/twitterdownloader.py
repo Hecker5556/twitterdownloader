@@ -162,12 +162,26 @@ class TwitterDownloader():
         elif data['dehydratedData'].get('messagesBeforeDehydration'):
             result = TwitterDownloader.beforeDehydrationHelper(data)
         return result
-    def __init__(self, proxy: str = None, debug: bool = False):
+    def __init__(self, proxy: str = None, debug: bool = False, credentials: dict[str, str] = None):
         self.proxy = proxy
         self.debug = debug
         self.base_url = "https://video.twimg.com"
         self.subtitles = None
         self.no_ffmpeg = False
+        self.authenticated = False
+        if credentials is not None:
+            if (credentials.get('guest_id') is None) or (credentials.get('auth_token') is None) or (credentials.get('csrf') is None):
+                raise Exception(f"Credentials missing! Required: guest_id, auth_token, csrf, check README.md")
+            self.csrf = credentials.get('csrf')
+            self.auth_token = credentials.get('auth_token')
+            self.guest_id = credentials.get('guest_id')
+            self.cookies = {
+                'guest_id': self.guest_id,
+                'auth_token': self.auth_token,
+                'ct0': self.csrf,
+            }
+            self.authenticated = True
+            
     @staticmethod
     def rawParse(data: dict):
         post = data['entities']['tweets']['entities'][(list(data['entities']['tweets']['entities'].keys())[0])]
@@ -195,7 +209,7 @@ class TwitterDownloader():
             info['added_context'] = {'url': note_url, 'text': post['birdwatch_pivot']['subtitle']['text'], 'authenticated_fetch': False}
         info['nsfw'] = post.get("possibly_sensitive")
         return info
-    async def download(self, link: str, max_size: int = None, return_media_url: bool = False, video_format: Literal['direct', 'dash'] = 'direct', caption_videos: bool = False, authenticated: bool = False):
+    async def download(self, link: str, max_size: int = None, return_media_url: bool = False, video_format: Literal['direct', 'dash'] = 'direct', caption_videos: bool = False):
         self.tweet_id = None
         for ptn in LINKPATTERNS:
             if id := re.search(ptn, link.split("?")[0]):
@@ -231,16 +245,7 @@ class TwitterDownloader():
         async with aiohttp.ClientSession(connector=self._give_connector(self.proxy), max_field_size=MAX_FIELD_SIZE) as session:
             if not hasattr(self, "session") or self.session.closed:
                 self.session = session
-            if authenticated:
-                from env import csrf, auth_token, guest_id
-                self.csrf = csrf
-                self.auth_token = auth_token
-                self.guest_id = guest_id
-                self.cookies = {
-                    'guest_id': self.guest_id,
-                    'auth_token': self.auth_token,
-                    'ct0': self.csrf,
-                }
+            if self.authenticated:
                 self.headers['x-csrf-token'] = self.csrf
                 await self._get_bearer_token()
                 if (not hasattr(self, "restid") or not isinstance(self.restid, str)) or (not hasattr(self, "tweetdetail") or not isinstance(self.tweetdetail, str) or (not hasattr(self, "fetchnote") or not isinstance(self.fetchnote, str))):
@@ -652,7 +657,7 @@ class TwitterDownloader():
                             json.dump(result, f1, indent=4)
             else:
                 raise Exception(f"Fetching data errored!: {result['errors'][0]['message']}")
-        for i in eval(f'result{self._path_parser(self._find_key(result, "entries"))}')[::-1]:
+        for i in self.find(result, "entries")[::-1]:
             if i.get("content", {}).get("entryType") == "TimelineTimelineItem":
                 entry = i
                 break
@@ -683,58 +688,24 @@ class TwitterDownloader():
                 if result:
                     return result
         return None
-    @staticmethod
-    def _find_key(obj, searching_for: str, not_null: bool = True):
-        path = []
-        if isinstance(obj, dict):
-            for key, value in obj.items():
-                if key == searching_for:
-                    if not_null and value:
-                        path.append(key)
-                        return path
-                    elif not not_null:
-                        path.append(key)
-                        return path
-                result = TwitterDownloader._find_key(value, searching_for, not_null)
-                if result:
-                    path.append(key)
-                    path += result
-                    return path
-        elif isinstance(obj, list):
-            for index, i in enumerate(obj):
-                result = TwitterDownloader._find_key(i, searching_for, not_null)
-                if result:
-                    path.append(index)
-                    path += result
-                    return path
-        return path
-    @staticmethod
-    def _path_parser(path):
-        templist = []
-        for i in path:
-            if isinstance(i, str):
-                templist.append(f"['{i}']")
-            elif isinstance(i, int):
-                templist.append(f"[{i}]")
-        return ''.join(templist)
     async def _tweet_result_parser(self, tweet_results: dict) -> dict:
         info = {}
-        attempt = self._find_key(tweet_results['legacy'], 'media')
+        attempt = self.find(tweet_results['legacy'], 'media')
         if attempt:
-            info['medias'] = eval(f"tweet_results['legacy']{self._path_parser(attempt)}")
+            info['medias'] = attempt
         else:
             info['medias'] = {}
-        username = eval(f"tweet_results{self._path_parser(self._find_key(tweet_results, 'screen_name'))}")
+        username = self.find(tweet_results, 'screen_name')
         info['author'] = {"username": "".join([x for x in username if x not in '\\/:*?"<>|()']),
-                        "nick": eval(f"tweet_results{self._path_parser(self._find_key(tweet_results, 'name'))}"),
+                        "nick": self.find(tweet_results, 'name'),
                         "link": f'https://x.com/{username}',
                         "avatar": None}
 
-        attempt = self._find_key(tweet_results, 'profile_image_url_https')
+        attempt = self.find(tweet_results, 'profile_image_url_https')
         if not attempt:
-            info['author']['avatar'] = eval(f"tweet_results{self._path_parser(self._find_key(tweet_results, 'image_url'))}")
+            info['author']['avatar'] = self.find(tweet_results, 'image_url')
         else:
-            info['author']['avatar'] = eval(f"tweet_results{self._path_parser(attempt)}")
+            info['author']['avatar'] = attempt
 
         if note_tweet := tweet_results.get("note_tweet"):
             info["full_text"] = unescape(note_tweet['note_tweet_results']['result'].get("text"))
@@ -750,20 +721,25 @@ class TwitterDownloader():
             else:
 
                 info["quoted"] = {}
-                username = eval(f"quoted{self._path_parser(self._find_key(quoted, 'screen_name'))}")
-                if quoted_media := quoted["result"]["legacy"]["entities"].get("media"):
-                    info["quoted"]["medias"] = await self._parse_media(quoted_media)
-                info["quoted"]["full_text"] = unescape(quoted["result"]["legacy"].get('full_text'))
-                info["quoted"]['author'] = {"username": "".join([x for x in username if x not in '\\/:*?"<>|()']), 
-                                            "nick": eval(f"quoted{self._path_parser(self._find_key(quoted, 'name'))}"),
-                                            "link": f'https://x.com/{username}',
-                                            "avatar": None}
-                attempt = self._find_key(quoted, 'profile_image_url_https')
-                if attempt:
-                    info['quoted']['author']['avatar'] = eval(f"quoted{self._path_parser(attempt)}")
+                if quoted['result'].get('legacy') is None:
+                    info['quoted'] = {
+                        'error': quoted['result'].get('__typename')
+                    }
                 else:
-                    info['quoted']['author']['avatar'] = eval(f"quoted{self._path_parser(self._find_key(quoted, 'image_url'))}")
-                info["quoted"]['link'] = tweet_results['legacy'].get('quoted_status_permalink').get('expanded')
+                    username = self.find(quoted, 'screen_name')
+                    if quoted_media := quoted["result"]["legacy"]["entities"].get("media"):
+                        info["quoted"]["medias"] = await self._parse_media(quoted_media)
+                    info["quoted"]["full_text"] = unescape(quoted["result"]["legacy"].get('full_text'))
+                    info["quoted"]['author'] = {"username": "".join([x for x in username if x not in '\\/:*?"<>|()']), 
+                                                "nick": self.find(quoted, 'name'),
+                                                "link": f'https://x.com/{username}',
+                                                "avatar": None}
+                    attempt = self.find(quoted, 'profile_image_url_https')
+                    if attempt:
+                        info['quoted']['author']['avatar'] = attempt
+                    else:
+                        info['quoted']['author']['avatar'] = self.find(quoted, 'image_url')
+                    info["quoted"]['link'] = tweet_results['legacy'].get('quoted_status_permalink').get('expanded')
         elif reply := tweet_results['legacy'].get("in_reply_to_status_id_str"):
             try:
                 info["replying_to"] = await self.download(f'https://x.com/{tweet_results["legacy"].get("in_reply_to_screen_name")}/status/{reply}', return_media_url=True, authenticated=True if hasattr(self, "csrf") else False)
@@ -779,49 +755,45 @@ class TwitterDownloader():
         info["views"] = tweet_results['views'].get('count', 0)
         if tweet_results.get("birdwatch_pivot"):
             note_url = tweet_results['birdwatch_pivot']['destinationUrl']
-            if os.path.exists("env.py"):
-                from env import csrf, auth_token, guest_id
-                self.csrf = csrf
-                self.auth_token = auth_token
-                self.guest_id = guest_id
-                if not hasattr(self, "fetchnote"):
-                    os.remove(os.path.join(base, "apiurls.json"))
-                    self.restid, self.tweetdetail, self.fetchnote = await self._get_api_url()
-                params = {
-                    'variables': json.dumps({"note_id": note_url.split("/n/")[1]}),
-                    'features': json.dumps(FEATURES_BIRDWATCH),
-                }
-                cookies = {
-                    'guest_id': self.guest_id,
-                    'auth_token': self.auth_token,
-                    'ct0': self.csrf,
-                }
-                headers = {
-                    'accept': '*/*',
-                    'accept-language': 'en-US,en;q=0.7',
-                    'authorization': self.bearer,
-                    'content-type': 'application/json',
-                    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'x-csrf-token': self.csrf,
-                }
-                async with self.session.get(self.fetchnote, headers=headers, cookies=cookies, params=params) as r:
-                    result = await r.json()
-                if not result.get('data'):
-                    if "following features cannot be null" in result['errors'][0]['message']:
-                        new_features = result['errors'][0]['message'].split(': ')[1].split(', ')
-                        for ft in new_features:
-                            if self.debug:
-                                print(f"adding new feature {ft} to features")
-                            FEATURES_BIRDWATCH[ft] = True
-                        with open(os.path.join(base, 'features_birdwatch.json'), 'w') as f1:
-                            json.dump(FEATURES_BIRDWATCH, f1)
-                        params = {
-                            'variables': json.dumps({"note_id": note_url.split("/n/")[1]}),
-                            'features': json.dumps(FEATURES_BIRDWATCH),
-                        }
 
-                        async with self.session.get(self.fetchnote, headers=self.headers, cookies=self.cookies, params=params) as r:
-                            result = await r.json()
+            if not hasattr(self, "fetchnote"):
+                os.remove(os.path.join(base, "apiurls.json"))
+                self.restid, self.tweetdetail, self.fetchnote = await self._get_api_url()
+            params = {
+                'variables': json.dumps({"note_id": note_url.split("/n/")[1]}),
+                'features': json.dumps(FEATURES_BIRDWATCH),
+            }
+            cookies = {
+                'guest_id': self.guest_id,
+                'auth_token': self.auth_token,
+                'ct0': self.csrf,
+            }
+            headers = {
+                'accept': '*/*',
+                'accept-language': 'en-US,en;q=0.7',
+                'authorization': self.bearer,
+                'content-type': 'application/json',
+                'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'x-csrf-token': self.csrf,
+            }
+            async with self.session.get(self.fetchnote, headers=headers, cookies=cookies, params=params) as r:
+                result = await r.json()
+            if not result.get('data'):
+                if "following features cannot be null" in result['errors'][0]['message']:
+                    new_features = result['errors'][0]['message'].split(': ')[1].split(', ')
+                    for ft in new_features:
+                        if self.debug:
+                            print(f"adding new feature {ft} to features")
+                        FEATURES_BIRDWATCH[ft] = True
+                    with open(os.path.join(base, 'features_birdwatch.json'), 'w') as f1:
+                        json.dump(FEATURES_BIRDWATCH, f1)
+                    params = {
+                        'variables': json.dumps({"note_id": note_url.split("/n/")[1]}),
+                        'features': json.dumps(FEATURES_BIRDWATCH),
+                    }
+
+                    async with self.session.get(self.fetchnote, headers=self.headers, cookies=self.cookies, params=params) as r:
+                        result = await r.json()
                 birdwatch = result['data']['birdwatch_note_by_rest_id']['data_v1']
                 birdwatch2 = result['data']['birdwatch_note_by_rest_id']
                 info['added_context'] = {'url': note_url, 'text': birdwatch['summary']['text'], 
@@ -876,19 +848,19 @@ class TwitterDownloader():
             }
             async with self.session.get(self.link, headers=self.headers, cookies=cookies) as r:
                 text = await r.text('utf-8')
-                matches = re.search(pattern ,text)
+                matches = await asyncio.to_thread(re.search, pattern ,text)
             if not matches:
                 await self._post_data()
-                async with self.session.get(self.link, headers=self.headers, ) as r:
+                async with self.session.get(self.link, headers=self.headers, cookies=cookies) as r:
                     text = await r.text('utf-8')
-                    matches = re.search(pattern ,text)
+                    matches = await asyncio.to_thread(pattern ,text)
                     if not matches:
                         if os.path.exists(os.path.join(base, "bearer_token.txt")):
                             os.remove(os.path.join(base, "bearer_token.txt"))
                             await self._post_data()
-                            async with self.session.get(self.link, headers=self.headers, ) as r:
+                            async with self.session.get(self.link, headers=self.headers, cookies=cookies) as r:
                                 text = await r.text('utf-8')
-                                matches = re.search(pattern ,text)
+                                matches = await asyncio.to_thread(re.search, pattern ,text)
             self.jslink = matches.group(1)
         pattern2 = r'{queryId:\"(.*?)\",operationName:\"TweetResultByRestId\"'
         pattern3 = r'queryId:\"(.*?)\",operationName:\"TweetDetail\"'
@@ -896,25 +868,26 @@ class TwitterDownloader():
             js = await r.text()
         location1 = js[js.find("TweetResultByRestId")-50:js.find("TweetResultByRestId")+50]
         location2 = js[js.find("TweetDetail")-50:js.find("TweetDetail")+50]
-        restid = re.search(pattern2, location1).group(1)
-        tweetdetail = re.search(pattern3, location2).group(1)
+        restid = (await asyncio.to_thread(re.search, pattern2, location1)).group(1)
+        tweetdetail = (await asyncio.to_thread(re.search, pattern3, location2)).group(1)
         restid = f'https://api.x.com/graphql/{restid}/TweetResultByRestId'
         tweetdetail = f'https://x.com/i/api/graphql/{tweetdetail}/TweetDetail'
-        js_fetchnote = r"(\d+)\:\"(shared~bundle\.GrokDrawer~bundle\.ReaderMode~bundle\.Birdwatch~bundle\.TwitterArticles~bundle\.Compose~bundle\.Sett)\""
-        js_fetchnote_match = re.search(js_fetchnote, text)
-        key = js_fetchnote_match.group(1)
-        value = re.search(re.escape(key) + r":\"([^~]*?)\",", text)
-        base_url = "https://abs.twimg.com/responsive-web/client-web/"
-
+        js_fetchnote = r"(\d+)\:\"((?:[^\"]*?)Birdwatch(?:[^\"]*?))\","
+        js_fetchnote_match = await asyncio.to_thread(re.findall, js_fetchnote, text)
         fetchnote = None
-        fetchnote_pattern = r":\"(.*?)\",operationName:\"BirdwatchFetchOneNote\",.*?}}"
-        async with self.session.get(base_url + js_fetchnote_match.group(2) + '.' +value.group(1) + "a" + ".js", cookies=cookies) as r:
-            js_text = await r.text("utf-8")
-        
-        js_text = js_text.split("queryId")
-        for i in js_text:
-            if fetchnote:=re.search(fetchnote_pattern, i):
-                fetchnote = fetchnote.group(1)
+        base_url = "https://abs.twimg.com/responsive-web/client-web/"
+        for number, url in js_fetchnote_match:
+            sett_pattern = fr"{number}:\"([\w\d]+)\","
+            setting = await asyncio.to_thread(re.search, sett_pattern, text)
+            async with self.session.get(base_url + url + '.' + setting.group(1) + "a" + ".js" ) as r:
+                js_text = await r.text("utf-8")
+                fetchnote_pattern = r":\"(.*?)\",operationName:\"BirdwatchFetchOneNote\",.*?}}"
+                js_text = js_text.split("queryId")
+                for i in js_text:
+                    if fetchnote:=(await asyncio.to_thread(re.search, fetchnote_pattern, i)):
+                        fetchnote = fetchnote.group(1)
+                        break
+            if fetchnote:
                 break
         fetchnote_url = f"https://x.com/i/api/graphql/{fetchnote}/BirdwatchFetchOneNote"
         thejson = {"restid": restid, "tweetdetail": tweetdetail, "fetchnote": fetchnote_url}
@@ -1017,10 +990,10 @@ class Grok(TwitterDownloader):
                     "modelConfigOverride":{},
                     "isTemporaryChat":False
                 }
-    def __init__(self, model: str = None, img_gen_count: int = 4, *args):
+    def __init__(self, model: str = None, img_gen_count: int = 4, **kargs):
         self.model = model
         self.img_gen_count = img_gen_count
-        super().__init__(*args)
+        super().__init__(**kargs)
         self.data = self.example_data(model, img_gen_count)
         self.headers = {
             'accept': '*/*',
@@ -1040,16 +1013,16 @@ class Grok(TwitterDownloader):
             'x-twitter-active-user': 'yes',
             'x-twitter-client-language': 'en',
         }
-        from env import guest_id, auth_token, csrf
+        if not hasattr(self, "guest_id") or not hasattr(self, "auth_token") or not hasattr(self, "csrf"):
+            raise Exception("Provide credentials dict in init! Check README.md")
         self.cookies = {
         'dnt': '1',
-        'guest_id': guest_id,
+        'guest_id': self.guest_id,
         'night_mode': '2',
-        'auth_token': auth_token,
-        'ct0': csrf,
+        'auth_token': self.auth_token,
+        'ct0': self.csrf,
         'lang': 'en',
         }
-        self.csrf = csrf
     async def __aenter__(self):
         self.started = False
         return self
@@ -1058,8 +1031,8 @@ class Grok(TwitterDownloader):
             print("".join(traceback.format_exception(a, b, c)))
         await self.session.close()
     async def start_chat(self, ):
-        if os.path.exists("queryIdcache.txt"):
-            with open("queryIdcache.txt", "r") as f1:
+        if os.path.exists(os.path.join(base, "queryIdcache.txt")):
+            with open(os.path.join(base, "queryIdcache.txt"), "r") as f1:
                 aaa = f1.read().split("\t")
                 if datetime.fromisoformat(aaa[1]) > datetime.now():
                     self.queryId = aaa[0]
@@ -1116,7 +1089,7 @@ class Grok(TwitterDownloader):
             if not queryId:
                 raise Exception(f"Couldnt fetch queryid for grok api")
             self.queryId = queryId
-            with open("queryIdcache.txt", "w") as f1:
+            with open(os.path.join(base, "queryIdcache.txt"), "w") as f1:
                 expiry = (datetime.now() + timedelta(days=7)).isoformat()
                 f1.write(f"{self.queryId}\t{expiry}")
         self.base_url_grok = "https://x.com/i/api/graphql/"+self.queryId+"/"
@@ -1152,15 +1125,7 @@ class Grok(TwitterDownloader):
             raise Exception(f"Run start_chat() before adding a response. If manually using your own values, set the Grok object 'started' attribute to True")
         if not hasattr(self, "bearer"):
             await self._get_bearer_token()
-            from env import guest_id, auth_token, csrf
-            self.cookies = {
-            'dnt': '1',
-            'guest_id': guest_id,
-            'night_mode': '2',
-            'auth_token': auth_token,
-            'ct0': csrf,
-            'lang': 'en',
-            }
+            
             self.headers = {
             'accept': '*/*',
             'accept-language': 'en-US,en;q=0.8',
@@ -1177,7 +1142,7 @@ class Grok(TwitterDownloader):
             'sec-fetch-site': 'same-origin',
             'sec-gpc': '1',
             'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-            'x-csrf-token': csrf,
+            'x-csrf-token': self.csrf,
             }
         headers = {
             'sec-ch-ua-platform': '"Windows"',
@@ -1305,7 +1270,7 @@ class Grok(TwitterDownloader):
             finished["message"] = result
             finished["webResults"] = web_results
             return finished
-async def main():
+async def async_main():
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("link", help="link to twitter post")
@@ -1314,41 +1279,20 @@ async def main():
     parser.add_argument("-p", "--proxy", type=str, help="https/socks proxy to use")
     parser.add_argument("-d", "--dash",default=False, action="store_true", help="download dash video format instead of direct")
     parser.add_argument("-c", "--caption", action="store_true", help="burn in twitter given captions into the video")
-    parser.add_argument("-a", "--authenticated", help="use credentials for all requests", action="store_true")
+    parser.add_argument("--credentials", "-f", help="Location containing credentials in JSON format, more on README.md", required=False)
     parser.add_argument("-dbg", "--debug", action="store_true", help="debug settings")
     args = parser.parse_args()
-    downloader = TwitterDownloader(args.proxy, args.debug)
-    result = await downloader.download(link = args.link, max_size=args.max_size, return_media_url=args.return_url,video_format= "dash" if args.dash else "direct",caption_videos= args.caption, authenticated=args.authenticated)
+    if args.credentials is not None and os.path.exists(args.credentials) is False:
+        raise FileNotFoundError(f"Couldn't find credentials file")
+    elif args.credentials is not None:
+        with open(args.credentials, "r") as f1:
+            creds = json.load(f1)
+    else:
+        creds = None
+    downloader = TwitterDownloader(args.proxy, args.debug, creds)
+    result = await downloader.download(link = args.link, max_size=args.max_size, return_media_url=args.return_url,video_format= "dash" if args.dash else "direct",caption_videos= args.caption)
     print(json.dumps(result, indent=4, ensure_ascii=False))
-async def chatting():
-    """example function to chat with grok in console"""
-    a = '\n'
-    async with Grok() as grok:
-        await grok.start_chat()
-        print("conversation id:", grok.conversation_id,)
-        deepsearch = False
-        reasoning = False
-        while True:
-            you = str(input(f"{'[deepsearch]' if deepsearch else ''}{'[reasoning]' if reasoning else ''}QUERY: "))
-            if you == "deepsearch":
-                deepsearch = True
-                continue
-            if you == "reasoning":
-                reasoning = True
-                continue
-            if you == "id":
-                grok.conversation_id = str(input("conversation id: "))
-                grok.data = Grok.data
-                continue
-            response = await grok.add_response(you, deep_search=deepsearch, reasoning=reasoning)
-            deepsearch = False
-            reasoning = False
-            print("GROK: " + response['message'])
-            if response.get('images'):
-                print(f"Following images have been generated:{a}{a.join([x.get('fileName') for x in response.get('images')])}")
-            if response.get("thinking"):
-                print(f"Grok thought for {response.get('thinking_time')} seconds")
-                print("Grok thought: ")
-                print(response.get("thinking"))
+def main():
+    asyncio.run(async_main())
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

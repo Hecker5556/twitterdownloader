@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "twitterdownloader"
-version = "0.1.1.1"
+version = "0.1.2"
 description = "Download posts from X, talk with Grok"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -16,3 +16,11 @@ dependencies = [
 ]
 [tool.setuptools.package-data]
 twitterdownloader = ["*.js"]
+
+[project.scripts]
+twitterdownloader = "twitterdownloader.twitterdownloader:main"
+grok = "twitterdownloader.grok:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["twitterdownloader*"]

@@ -1,6 +1,6 @@
 # Simple twitter post downloader
 ## How it works
-This code uses the new v2 api twitter uses, and it uses guest authentication to fetch information about the tweet from the graphql api. It gets the authorization bearer from a main.js file and generates a guest token from the official api.
+By default searches through website source, extracts either seroval type information and parses it, or a raw response. Optionally, using credentials uses the X API to fetch post information. X API is no longer supported without credentials.
 
 Gifs are stored as mp4, you can convert it to gifs with ffmpeg.
 
@@ -17,19 +17,14 @@ Capability to download manifest (DASH) formats.
 New class Grok to start chats with and generate images with (requires authentication).
 ## Setup
 Written in Python 3.10.9
-```bash
-git clone https://github.com/Hecker5556/twitterdownloader.git
+In env of your choice:
 ```
-```bash
-cd twitterdownloader
-```
-```bash
-pip install -r requirements.txt
+pip install "git+https://github.com/Hecker5556/twitterdownloader"
 ```
 
 ## Usage
 ```
-usage: twitterdownloader.py [-h] [-m MAX_SIZE] [-r] link
+usage: twitterdownloader [-h] [-m MAX_SIZE] [-r] [-p PROXY] [-d] [-c] [--credentials CREDENTIALS] [-dbg] link
 
 positional arguments:
   link                  link to twitter post
@@ -38,7 +33,23 @@ options:
   -h, --help            show this help message and exit
   -m MAX_SIZE, --max-size MAX_SIZE
                         max size in mb of a video
-  -r, --return-url      print urls of medias instead of download
+  -r, --return-url      returns urls of medias instead of download
+  -p PROXY, --proxy PROXY
+                        https/socks proxy to use
+  -d, --dash            download dash video format instead of direct
+  -c, --caption         burn in twitter given captions into the video
+  --credentials CREDENTIALS, -f CREDENTIALS
+                        Location containing credentials in JSON format, more on README.md
+  -dbg, --debug         debug settings
+```
+```
+usage: grok [-h] credentials
+
+positional arguments:
+  credentials  Location containing credentials in JSON format, more on README.md
+
+options:
+  -h, --help   show this help message and exit
 ```
 
 ```python
@@ -54,6 +65,14 @@ async def main():
     downloader = TwitterDownloader()
     result = await downloader.download("https://x.com/BronzeAya/status/1869967014695141528")
     print(result)
+    #optional credentials
+    credentials = {
+      "guest_id": "v1..." ,
+      "auth_token": "2..." ,
+      "csrf": "4..."
+    }
+    authenticated_downloader = TwitterDownloader(credentials=credentials)
+    result = await authenticated_downloader.download("url...")
 asyncio.run(main())
 ```
 Grok
@@ -61,7 +80,12 @@ Grok
 from twitterdownloader import Grok
 import asyncio
 async def main():
-  async with Grok() as grok:
+  credentials = {
+    "guest_id": "v1..." ,
+    "auth_token": "2..." ,
+    "csrf": "4..."
+  }
+  async with Grok(credentials=credentials) as grok:
     await grok.start_chat()
     result = await grok.add_response("hi how are you")
     print(result.get("message"))
@@ -70,12 +94,7 @@ async def main():
 asyncio.run(main())
 ```
 ## Get private/nsfw videos with authenticated fetching / use grok
-### Step 1. Create an env.py file in the same directory as the code, and put this there
-```python
-guest_id = '' 
-auth_token = '' 
-csrf = ''
-```
+### Step 1. Create a config file in JSON format
 ### Step 2. Go to twitter, find a nsfw/private video
 Example: [https://x.com/sacredgraves/status/1707962195357630713?s=46](https://x.com/sacredgraves/status/1707962195357630713?s=46)
 ### Step 3. Open developer tab, go to network, hit refresh
@@ -87,4 +106,12 @@ Example: [https://x.com/sacredgraves/status/1707962195357630713?s=46](https://x.
 
 ![hello2](image-1.png)
 
-### Step 6. Add them to the env.py file, ct0 is the csrf token
+### Step 6. Add them to the JSON file as such:
+```json
+{
+  "guest_id": "v1..." ,
+  "auth_token": "2..." ,
+  "csrf": "4..."
+}
+```
+ct0 is csrf.
