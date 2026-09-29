@@ -3,10 +3,10 @@ import asyncio
 import argparse
 import os
 import json
-async def chatting(guest_id, auth_token, csrf):
+async def chatting(credentials):
     """example function to chat with grok in console"""
     a = '\n'
-    async with Grok(guest_id, auth_token, csrf) as grok:
+    async with Grok(credentials=credentials) as grok:
         await grok.start_chat()
         print("conversation id:", grok.conversation_id,)
         deepsearch = False
@@ -44,7 +44,7 @@ def main():
     if (creds.get('guest_id') is None) or (creds.get('auth_token') is None) or (creds.get('csrf') is None):
         raise Exception(f"Credentials missing! Required: guest_id, auth_token, csrf, check README.md")
     try:
-        asyncio.run(chatting(creds.get('guest_id'), creds.get('auth_token'), creds.get('csrf')))
+        asyncio.run(chatting(credentials=creds))
     except KeyboardInterrupt:
         print("Exiting...")
 if __name__ == "__main__":
