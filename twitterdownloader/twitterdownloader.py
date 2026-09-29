@@ -133,7 +133,12 @@ class TwitterDownloader():
             'created_at': int(tweet_result['details'].get("created_at_ms", 0) / 1000),
         }
         if tweet_result.get('quoted_tweet_results'):
-            result['quoted'] = TwitterDownloader.beforeDehydrationHelper(tweet_result.get('quoted_tweet_results'), True)
+            if tweet_result['quoted_tweet_results']['result'].get('unavailable_reason'):
+                result['quoted'] = {
+                    'error': tweet_result['quoted_tweet_results']['result'].get('unavailable_reason'),
+                }
+            else:
+                result['quoted'] = TwitterDownloader.beforeDehydrationHelper(tweet_result.get('quoted_tweet_results'), True)
         if tweet_result.get('reply_to_user_results'):
             result['replying_to'] = {
                 'link': f"https://x.com/{tweet_result['reply_to_user_results']['result']['core']['screen_name']}/status/{tweet_result['reply_to_results']['rest_id']}"
