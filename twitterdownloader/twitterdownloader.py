@@ -130,7 +130,7 @@ class TwitterDownloader():
             'caption': tweet_result['details'].get('full_text'),
             'medias': tweet_result['media_entities2'],
             'link': f"https://x.com/{tweet_result['core']['user_results']['result']['core']['screen_name']}/status/{by_rest_id['rest_id'] if is_quoted is False else data['rest_id']}",
-            'created_at': int(tweet_result['details'].get("created_at_ms", 0) / 1000),
+            'date_posted': int(tweet_result['details'].get("created_at_ms", 0) / 1000),
         }
         if tweet_result.get('quoted_tweet_results'):
             if tweet_result['quoted_tweet_results']['result'].get('unavailable_reason'):
