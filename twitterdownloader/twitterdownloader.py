@@ -117,7 +117,7 @@ class TwitterDownloader():
         result = {
             'author': {
                 'username': tweet_result['core']['user_results']['result']['core']['screen_name'],
-                'nickname': tweet_result['core']['user_results']['result']['core']['name'],
+                'nick': tweet_result['core']['user_results']['result']['core']['name'],
                 'avatar': tweet_result['core']['user_results']['result']['avatar']['image_url'],
                 'link': f"https://x.com/{tweet_result['core']['user_results']['result']['core']['screen_name']}"
             },
