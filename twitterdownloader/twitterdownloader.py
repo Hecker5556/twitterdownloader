@@ -363,7 +363,7 @@ class TwitterDownloader():
                        result['quoted']['medias'] = await self._parse_media(result['quoted']['medias'])
                     if result.get("replying_to") is not None:
                         try:
-                            result['replying_to'] = await self.download(result['replying_to']['link'], max_size, return_media_url, video_format, caption_videos, authenticated)
+                            result['replying_to'] = await self.download(result['replying_to']['link'], max_size, return_media_url, video_format, caption_videos)
                         except Exception as e:
                             traceback.print_exc()
                             result['replying_to']['error'] = str(e)
@@ -375,12 +375,12 @@ class TwitterDownloader():
                         result['medias'] = await self._parse_media(result['medias'])
                     if result.get("quoted") is not None:
                         try:
-                            result['quoted'] = await self.download(result['quoted']['link'], max_size, return_media_url, video_format, caption_videos, authenticated)
+                            result['quoted'] = await self.download(result['quoted']['link'], max_size, return_media_url, video_format, caption_videos)
                         except Exception as e:
                             result['quoted']['error'] = str(e)
                 if result.get("replying_to") is not None:
                     try:
-                        result['replying_to'] = await self.download(result['replying_to']['link'], max_size, return_media_url, video_format, caption_videos, authenticated)
+                        result['replying_to'] = await self.download(result['replying_to']['link'], max_size, return_media_url, video_format, caption_videos)
                     except Exception as e:
                         traceback.print_exc()
                         result['replying_to']['error'] = str(e)
