@@ -116,6 +116,10 @@ class TwitterDownloader():
             tweet_result = by_rest_id['result']
         else:
             tweet_result = data['result']
+        if tweet_result['core']['user_results']['result'].get('core') is None:
+            return {
+                'link': f'https://x.com/i/status/{tweet_result["rest_id"]}'
+            }
         result = {
             'author': {
                 'username': tweet_result['core']['user_results']['result']['core']['screen_name'],
@@ -361,6 +365,8 @@ class TwitterDownloader():
                         raise Exception(f"Errored when fetching post: {jsonResponse['matches'][1]['l']['metadata']['text']}")
                     result = self.serovalParse(jsonResponse)
                     result['medias'] = await self._parse_media(result['medias'])
+                    if result.get("quoted") is not None and result['quoted'].get("author") is None and result['quoted'].get("link") is not None:
+                        result['quoted'] = await self.download(result['quoted']['link'], max_size, return_media_url, video_format, caption_videos)
                     if result.get("quoted") is not None and len(result.get("quoted").get("medias", [])) > 0:
                        result['quoted']['medias'] = await self._parse_media(result['quoted']['medias'])
                     if result.get("replying_to") is not None:
