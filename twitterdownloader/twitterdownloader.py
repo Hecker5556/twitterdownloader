@@ -111,6 +111,8 @@ class TwitterDownloader():
     def beforeDehydrationHelper(data: dict, is_quoted: bool = False):
         if is_quoted is False:
             by_rest_id = TwitterDownloader.find(data['dehydratedData']['messagesBeforeDehydration'], "tweet_result_by_rest_id")
+            if by_rest_id.get('result') is None:
+                raise Exception("Post not available, reason unknown")
             tweet_result = by_rest_id['result']
         else:
             tweet_result = data['result']
@@ -127,7 +129,7 @@ class TwitterDownloader():
             'replies': tweet_result['counts']['reply_count'],
             'retweets': tweet_result['counts']['retweet_count'],
             'views': tweet_result['views']['count'],
-            'caption': tweet_result['details'].get('full_text'),
+            'full_text': tweet_result['details'].get('full_text'),
             'medias': tweet_result['media_entities2'],
             'link': f"https://x.com/{tweet_result['core']['user_results']['result']['core']['screen_name']}/status/{by_rest_id['rest_id'] if is_quoted is False else data['rest_id']}",
             'date_posted': int(tweet_result['details'].get("created_at_ms", 0) / 1000),
