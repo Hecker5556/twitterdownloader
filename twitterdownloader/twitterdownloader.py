@@ -127,14 +127,14 @@ class TwitterDownloader():
                 'avatar': tweet_result['core']['user_results']['result']['avatar']['image_url'],
                 'link': f"https://x.com/{tweet_result['core']['user_results']['result']['core']['screen_name']}"
             },
-            'likes': tweet_result['counts']['favorite_count'],
-            'bookmarks': tweet_result['counts']['bookmark_count'],
-            'quotes': tweet_result['counts']['quote_count'],
-            'replies': tweet_result['counts']['reply_count'],
-            'retweets': tweet_result['counts']['retweet_count'],
-            'views': tweet_result['views']['count'],
+            'likes': tweet_result['counts'].get('favorite_count'),
+            'bookmarks': tweet_result['counts'].get('bookmark_count'),
+            'quotes': tweet_result['counts'].get('quote_count'),
+            'replies': tweet_result['counts'].get('reply_count'),
+            'retweets': tweet_result['counts'].get('retweet_count'),
+            'views': tweet_result['views'].get('count'),
             'full_text': tweet_result['details'].get('full_text'),
-            'medias': tweet_result['media_entities2'],
+            'medias': tweet_result.get('media_entities2'),
             'link': f"https://x.com/{tweet_result['core']['user_results']['result']['core']['screen_name']}/status/{by_rest_id['rest_id'] if is_quoted is False else data['rest_id']}",
             'date_posted': int(tweet_result['details'].get("created_at_ms", 0) / 1000),
         }
@@ -623,7 +623,7 @@ class TwitterDownloader():
                     mdia['variants'] = {"direct": list(sorted(mdia['variants']['direct'], key=lambda x: x.get('size'), reverse=True)), "dash": list(sorted(mdia['variants']['dash'], key=lambda x: x.get('size'), reverse=True))}
                 else:
                     for j in i['video_info']['variants']:
-                        mdia['variants']["direct"].append({"bitrate": int(j['bitrate']), "url": j['url'], "height": i['sizes']['large']['h'], "width": i['sizes']['large']['w'], "size": None, "size_mb": None, "type": "direct"})
+                        mdia['variants']["direct"].append({"bitrate": int(j['bitrate']), "url": j['url'], "height": i.get('sizes', {}).get('large', {}).get('h'), "width": i.get('sizes', {}).get('large', {}).get('w'), "size": None, "size_mb": None, "type": "direct"})
             elif i['type'] == 'photo':
                 mdia['type'] = i['type']
                 mdia['url'] = i['media_url_https']
