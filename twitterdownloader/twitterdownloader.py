@@ -111,7 +111,7 @@ class TwitterDownloader():
     def beforeDehydrationHelper(data: dict, is_quoted: bool = False):
         if is_quoted is False:
             by_rest_id = TwitterDownloader.find(data['dehydratedData']['messagesBeforeDehydration'], "tweet_result_by_rest_id")
-            if by_rest_id.get('result') is None:
+            if by_rest_id is None or by_rest_id.get('result') is None:
                 raise Exception("Post not available, reason unknown")
             tweet_result = by_rest_id['result']
         else:
@@ -166,6 +166,18 @@ class TwitterDownloader():
                     break
             result = TwitterDownloader.serovalParseHelper(records, mapEntry)
         elif data['dehydratedData'].get('messagesBeforeDehydration'):
+            graphql_response = None
+            for i in data['dehydratedData']['messagesBeforeDehydration']:
+                if i.get("kind") == "GraphQLRequestStream.Completed":
+                    if i["result"]["kind"] != "Result.Ok":
+                        raise Exception(f"Graphql request result not Ok: {i}")
+                    graphql_response = json.loads(i["result"]["value"])
+                    break
+            check = TwitterDownloader.find(data['dehydratedData']['messagesBeforeDehydration'], "tweet_result_by_rest_id")
+            if check is None and graphql_response is None:
+                raise Exception(f"Couldn't find graphql response")
+            elif check is None:
+                data['dehydratedData']['messagesBeforeDehydration'] = graphql_response
             result = TwitterDownloader.beforeDehydrationHelper(data)
         return result
     def __init__(self, proxy: str = None, debug: bool = False, credentials: dict[str, str] = None):
