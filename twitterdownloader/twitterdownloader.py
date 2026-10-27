@@ -116,6 +116,10 @@ class TwitterDownloader():
             tweet_result = by_rest_id['result']
         else:
             tweet_result = data['result']
+        if tweet_result.get("tombstone"):
+            return {
+                'error': f"Error: {tweet_result['tombstone'].get('__typename')}, {tweet_result['tombstone'].get('text', {}).get('text', '')}"
+            }
         if tweet_result['core']['user_results']['result'].get('core') is None:
             return {
                 'link': f'https://x.com/i/status/{tweet_result["rest_id"]}'
@@ -376,6 +380,8 @@ class TwitterDownloader():
                     if (jsonResponse['matches'][1].get('l', {}).get('metadata', {}).get('status', '') == 'unavailable'):
                         raise Exception(f"Errored when fetching post: {jsonResponse['matches'][1]['l']['metadata']['text']}")
                     result = self.serovalParse(jsonResponse)
+                    if result.get('error'):
+                        return result
                     result['medias'] = await self._parse_media(result['medias'])
                     if result.get("quoted") is not None and result['quoted'].get("author") is None and result['quoted'].get("link") is not None:
                         result['quoted'] = await self.download(result['quoted']['link'], max_size, return_media_url, video_format, caption_videos)
