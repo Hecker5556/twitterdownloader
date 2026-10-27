@@ -155,8 +155,8 @@ class TwitterDownloader():
             }
         if tweet_result.get('birdwatch_pivot'):
             result['added_context'] = {
-                'url': result['birdwatch_pivot'].get("destination_url"),
-                "text": TwitterDownloader.find(result, "note").get("text")
+                'url': tweet_result['birdwatch_pivot'].get("destination_url"),
+                "text": TwitterDownloader.find(tweet_result, "note").get("summary", {}).get("text")
             }
         return result
     @staticmethod
@@ -182,6 +182,7 @@ class TwitterDownloader():
                 raise Exception(f"Couldn't find graphql response")
             elif check is None:
                 data['dehydratedData']['messagesBeforeDehydration'] = graphql_response
+            print(json.dumps(data, indent=4, ensure_ascii=False))
             result = TwitterDownloader.beforeDehydrationHelper(data)
         return result
     def __init__(self, proxy: str = None, debug: bool = False, credentials: dict[str, str] = None):
