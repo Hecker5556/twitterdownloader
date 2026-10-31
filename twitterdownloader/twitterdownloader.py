@@ -172,7 +172,7 @@ class TwitterDownloader():
         elif data['dehydratedData'].get('messagesBeforeDehydration'):
             graphql_response = None
             for i in data['dehydratedData']['messagesBeforeDehydration']:
-                if i.get("kind") == "GraphQLRequestStream.Completed":
+                if i.get("kind") == "GraphQLRequestStream.Completed" or i.get("kind") == 1:
                     if i["result"]["kind"] != "Result.Ok":
                         raise Exception(f"Graphql request result not Ok: {i}")
                     graphql_response = json.loads(i["result"]["value"])
@@ -182,7 +182,6 @@ class TwitterDownloader():
                 raise Exception(f"Couldn't find graphql response")
             elif check is None:
                 data['dehydratedData']['messagesBeforeDehydration'] = graphql_response
-            print(json.dumps(data, indent=4, ensure_ascii=False))
             result = TwitterDownloader.beforeDehydrationHelper(data)
         return result
     def __init__(self, proxy: str = None, debug: bool = False, credentials: dict[str, str] = None):
